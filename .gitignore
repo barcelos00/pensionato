@@ -1,0 +1,13 @@
+# Conexão e credenciais do MySQL
+config.php
+conexao.php
+db.php
+
+# Ficheiros do sistema operativo
+.DS_Store
+Thumbs.db
+*.log
+
+# Cache e configurações locais de IDEs
+.vscode/
+.idea/

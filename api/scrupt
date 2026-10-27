@@ -1,0 +1,66 @@
+CREATE DATABASE IF NOT EXISTS pensionato_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE pensionato_db;
+
+-- 1. Tabela de Usuários (Administradores)
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    usuario VARCHAR(50) NOT NULL UNIQUE,
+    senha VARCHAR(255) NOT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Tabela de Quartos (Com os novos campos para o catálogo público)
+CREATE TABLE IF NOT EXISTS quartos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero VARCHAR(50) NOT NULL,
+    andar VARCHAR(50) NOT NULL,
+    bairro VARCHAR(100) DEFAULT 'Centro',
+    tipo_mobilia VARCHAR(50) DEFAULT 'Simples',
+    foto_url VARCHAR(255) NULL,
+    caracteristicas TEXT
+);
+
+-- 3. Tabela de Leitos
+CREATE TABLE IF NOT EXISTS leitos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    quarto_id INT NOT NULL,
+    codigo VARCHAR(20) NOT NULL,
+    FOREIGN KEY (quarto_id) REFERENCES quartos(id) ON DELETE CASCADE
+);
+
+-- 4. Tabela de Inquilinos
+CREATE TABLE IF NOT EXISTS inquilinos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    telefone VARCHAR(20) NOT NULL,
+    valor_aluguel DECIMAL(10,2) NOT NULL,
+    dia_vencimento INT NOT NULL,
+    leito_id INT NULL,
+    FOREIGN KEY (leito_id) REFERENCES leitos(id) ON DELETE SET NULL
+);
+
+-- 5. Tabela de Histórico de Mensalidades
+CREATE TABLE IF NOT EXISTS pagamentos_inquilinos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    inquilino_id INT NOT NULL,
+    mes_referencia VARCHAR(7) NOT NULL, -- Formato 'YYYY-MM'
+    pago TINYINT(1) DEFAULT 1,
+    FOREIGN KEY (inquilino_id) REFERENCES inquilinos(id) ON DELETE CASCADE
+);
+
+-- 6. Tabela de Despesas
+CREATE TABLE IF NOT EXISTS despesas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    titulo VARCHAR(150) NOT NULL,
+    valor DECIMAL(10,2) NOT NULL,
+    categoria VARCHAR(50) NOT NULL,
+    tipo VARCHAR(20) NOT NULL, -- 'Consumo' ou 'Emergência'
+    status VARCHAR(20) DEFAULT 'Pendente',
+    mes_referencia VARCHAR(7) NOT NULL
+);
+
+-- Inserção do usuário admin inicial
+INSERT INTO usuarios (nome, usuario, senha) 
+VALUES ('Administrador Padrão', 'admin', 'admin123')
+ON DUPLICATE KEY UPDATE id=id;

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pensionato Pro - Login</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="auth-body">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="brand">Pensionato <span class="brand-highlight">Pro</span></div>
+            <p>Painel Administrativo para Proprietários</p>
+        </div>
+        
+        <form id="form-login" onsubmit="handleLogin(event)" class="auth-form">
+            <div class="form-group">
+                <label for="login-user">Usuário / E-mail</label>
+                <input type="text" id="login-user" required placeholder="seu@email.com" class="form-control">
+            </div>
+            
+            <div class="form-group">
+                <label for="login-pass">Senha de Acesso</label>
+                <input type="password" id="login-pass" required placeholder="••••••••" class="form-control">
+            </div>
+
+            <div id="login-error" style="display:none; color:var(--danger); font-size:0.8rem; font-weight:bold; margin-bottom:0.75rem; text-align:center;">
+                Usuário ou senha incorretos!
+            </div>
+
+            <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:0.75rem;">Entrar no Sistema</button>
+            
+            <div style="text-align:center; margin-top:1.25rem;">
+                <a href="cadastro.html" style="color:var(--primary); text-decoration:none; font-size:0.85rem; font-weight:600;">Criar nova conta de Administrador</a>
+            </div>
+        </form>
+    </div>
+
+    <script src="js/state.js"></script>
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+            const errorDiv = document.getElementById('login-error');
+
+            const success = await DBService.login(user, pass);
+            if (success) {
+                window.location.href = 'index.html';
+            } else {
+                errorDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

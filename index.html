@@ -6,6 +6,7 @@
     <title>Pensionato Pro - Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 </head>
 <body>
     <!-- OVERLAY ESCURO ATRÁS DO MENU -->
@@ -77,7 +78,7 @@
                 </div>
             </div>
 
-            <!-- ÁREA DO GRÁFICO E VENCIMENTOS (CONTROLADOS TOTALMENTE PELO CSS) -->
+            <!-- ÁREA DO GRÁFICO E VENCIMENTOS -->
             <div class="dashboard-content-grid">
                 <div class="card chart-card-wrapper">
                     <h4 style="margin-bottom:1rem; color:var(--text-dark); font-weight:800;">Comparativo do Mês</h4>
@@ -116,6 +117,20 @@
         </div>
     </div>
 
+    <!-- Modal PIX (Adicionado para garantir compatibilidade caso acionado da dashboard) -->
+    <div id="modal-pix" class="modal-overlay">
+        <div class="modal-card" style="text-align:center;">
+            <div class="modal-header"><span>Cobrança via PIX</span><button type="button" onclick="closeModal('modal-pix')" class="btn-close">&times;</button></div>
+            <div class="modal-body">
+                <p>Inquilino: <strong id="pix-tenant-name">---</strong></p>
+                <p style="font-size:1.2rem; color:#10b981; font-weight:bold; margin-bottom:1rem;">Valor: <span id="pix-amount">R$ 0,00</span></p>
+                <div id="pix-qrcode" style="display:flex; justify-content:center; margin:1rem 0;"></div>
+                <small style="color:#64748b;">Escaneie o QR Code acima para pagar.</small>
+            </div>
+            <div class="modal-actions" style="justify-content:center;"><button type="button" onclick="closeModal('modal-pix')" class="btn-secondary">Fechar</button></div>
+        </div>
+    </div>
+
     <script src="js/state.js"></script>
     <script src="js/components.js"></script>
     <script src="js/app.js"></script>
@@ -127,4 +142,4 @@
         });
     </script>
 </body>
-</html>
+</html> 

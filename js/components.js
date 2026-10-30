@@ -209,7 +209,7 @@ async function renderRooms() {
     await renderCasasEQuartos();
 }
 
-// 3. TABELA DE INQUILINOS (FORMATADA COM CLASSES)
+// 3. TABELA DE INQUILINOS
 async function renderTenants() {
     const currentMonth = DBService.getCurrentSelectedMonth();
     const tbody = document.getElementById('tenants-table-body');
@@ -259,7 +259,7 @@ async function toggleTenantPaymentForMonth(tenantId) {
     renderTenants();
 }
 
-// 4. TABELA DE DESPESAS (FORMATADA COM CLASSES)
+// 4. TABELA DE DESPESAS
 async function renderExpenses() {
     const currentMonth = DBService.getCurrentSelectedMonth();
     const tbody = document.getElementById('expenses-table-body');

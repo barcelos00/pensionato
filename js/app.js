@@ -6,8 +6,13 @@
 // MODAIS
 function openModal(id) {
     const modal = document.getElementById(id);
-    if (!modal) return;
+    if (!modal) {
+        console.error("Modal não encontrado com o ID:", id);
+        return;
+    }
     modal.style.display = 'flex';
+    modal.style.zIndex = '9999'; // Garante que fica por cima de tudo
+    
     if (id === 'modal-room') populateCasaSelect('room-casa-select');
     if (id === 'modal-tenant') populateBedSelect('tenant-bed-select');
     if (id === 'modal-edit-tenant') populateBedSelect('edit-tenant-bed-select');
@@ -319,6 +324,7 @@ function openPixModal(tenantName, amount) {
 
     openModal('modal-pix');
 }
+
 // ALTERNAR MENU HAMBURGUER (SIDEBAR)
 function toggleSidebar() {
     const sidebar = document.getElementById('main-sidebar');

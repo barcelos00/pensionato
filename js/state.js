@@ -1,12 +1,25 @@
 /**
  * js/state.js
- * Camada de Integração com as APIs em PHP
+ * Camada de Integração com as APIs em PHP (Versão Otimizada para Auto Save e Deploy)
  */
+
+// Define dinamicamente a base da API para funcionar perfeitamente em qualquer ambiente
+const API_BASE = (() => {
+    const loc = window.location;
+    const pathSegments = loc.pathname.split('/');
+    if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+        if (pathSegments.length > 1 && pathSegments[1] !== '') {
+            return `/${pathSegments[1]}/api/`;
+        }
+    }
+    return 'api/';
+})();
+
 const DBService = {
     // AUTENTICAÇÃO
     async login(user, pass) {
         try {
-            const res = await fetch('api/auth.php?action=login', {
+            const res = await fetch(`${API_BASE}auth.php?action=login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user, pass })
@@ -26,7 +39,7 @@ const DBService = {
 
     async registerUser(name, user, pass) {
         try {
-            const res = await fetch('api/auth.php?action=register', {
+            const res = await fetch(`${API_BASE}auth.php?action=register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, user, pass })
@@ -66,7 +79,7 @@ const DBService = {
     // CASAS / UNIDADES
     async getCasas() {
         try {
-            const res = await fetch('api/casas.php?action=list');
+            const res = await fetch(`${API_BASE}casas.php?action=list`);
             return await res.json();
         } catch (e) {
             console.error("Erro ao buscar casas:", e);
@@ -76,7 +89,7 @@ const DBService = {
 
     async addCasa(formData) {
         try {
-            const res = await fetch('api/casas.php?action=add', { method: 'POST', body: formData });
+            const res = await fetch(`${API_BASE}casas.php?action=add`, { method: 'POST', body: formData });
             return await res.json();
         } catch (e) {
             console.error("Erro ao adicionar casa:", e);
@@ -86,7 +99,7 @@ const DBService = {
 
     async updateCasa(formData) {
         try {
-            const res = await fetch('api/casas.php?action=update', { method: 'POST', body: formData });
+            const res = await fetch(`${API_BASE}casas.php?action=update`, { method: 'POST', body: formData });
             return await res.json();
         } catch (e) {
             console.error("Erro ao atualizar casa:", e);
@@ -96,7 +109,7 @@ const DBService = {
 
     async deleteCasa(casaId) {
         try {
-            const res = await fetch('api/casas.php?action=delete', {
+            const res = await fetch(`${API_BASE}casas.php?action=delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: casaId })
@@ -111,7 +124,7 @@ const DBService = {
     // QUARTOS
     async getRooms() {
         try {
-            const res = await fetch('api/quartos.php?action=list');
+            const res = await fetch(`${API_BASE}quartos.php?action=list`);
             return await res.json();
         } catch (e) {
             console.error("Erro ao buscar quartos:", e);
@@ -121,7 +134,7 @@ const DBService = {
 
     async addRoom(formData) {
         try {
-            const res = await fetch('api/quartos.php?action=add', { method: 'POST', body: formData });
+            const res = await fetch(`${API_BASE}quartos.php?action=add`, { method: 'POST', body: formData });
             return await res.json();
         } catch (e) {
             console.error("Erro ao adicionar quarto:", e);
@@ -131,7 +144,7 @@ const DBService = {
 
     async updateRoom(formData) {
         try {
-            const res = await fetch('api/quartos.php?action=update', { method: 'POST', body: formData });
+            const res = await fetch(`${API_BASE}quartos.php?action=update`, { method: 'POST', body: formData });
             return await res.json();
         } catch (e) {
             console.error("Erro ao atualizar quarto:", e);
@@ -141,7 +154,7 @@ const DBService = {
 
     async deleteRoom(roomId) {
         try {
-            const res = await fetch('api/quartos.php?action=delete', {
+            const res = await fetch(`${API_BASE}quartos.php?action=delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: roomId })
@@ -156,7 +169,7 @@ const DBService = {
     // INQUILINOS
     async getTenants() {
         try {
-            const res = await fetch('api/inquilinos.php?action=list');
+            const res = await fetch(`${API_BASE}inquilinos.php?action=list`);
             return await res.json();
         } catch (e) {
             console.error("Erro ao buscar inquilinos:", e);
@@ -166,7 +179,7 @@ const DBService = {
 
     async addTenant(name, phone, rent, dueDay, bedId) {
         try {
-            const res = await fetch('api/inquilinos.php?action=add', {
+            const res = await fetch(`${API_BASE}inquilinos.php?action=add`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, phone, rent, dueDay, bedId })
@@ -180,7 +193,7 @@ const DBService = {
 
     async updateTenant(id, name, phone, rent, dueDay, bedId) {
         try {
-            const res = await fetch('api/inquilinos.php?action=update', {
+            const res = await fetch(`${API_BASE}inquilinos.php?action=update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, name, phone, rent, dueDay, bedId })
@@ -194,7 +207,7 @@ const DBService = {
 
     async deleteTenant(tenantId) {
         try {
-            const res = await fetch('api/inquilinos.php?action=delete', {
+            const res = await fetch(`${API_BASE}inquilinos.php?action=delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: tenantId })
@@ -208,7 +221,7 @@ const DBService = {
 
     async vacateBed(bedId) {
         try {
-            const res = await fetch('api/inquilinos.php?action=vacate_bed', {
+            const res = await fetch(`${API_BASE}inquilinos.php?action=vacate_bed`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ bedId })
@@ -222,7 +235,7 @@ const DBService = {
 
     async toggleTenantPaymentForMonth(tenantId, monthYear) {
         try {
-            const res = await fetch('api/inquilinos.php?action=toggle_payment', {
+            const res = await fetch(`${API_BASE}inquilinos.php?action=toggle_payment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenantId, monthYear })
@@ -238,7 +251,7 @@ const DBService = {
     async getExpenses(monthYear) {
         try {
             const month = monthYear || this.getCurrentSelectedMonth();
-            const res = await fetch(`api/despesas.php?action=list&month=${month}`);
+            const res = await fetch(`${API_BASE}despesas.php?action=list&month=${month}`);
             return await res.json();
         } catch (e) {
             console.error("Erro ao buscar despesas:", e);
@@ -249,7 +262,7 @@ const DBService = {
     async addExpense(title, amount, category, type) {
         try {
             const monthYear = this.getCurrentSelectedMonth();
-            const res = await fetch('api/despesas.php?action=add', {
+            const res = await fetch(`${API_BASE}despesas.php?action=add`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, amount, category, type, monthYear })
@@ -263,7 +276,7 @@ const DBService = {
 
     async deleteExpense(expenseId) {
         try {
-            const res = await fetch('api/despesas.php?action=delete', {
+            const res = await fetch(`${API_BASE}despesas.php?action=delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: expenseId })
@@ -277,7 +290,7 @@ const DBService = {
 
     async toggleExpensePayment(expenseId) {
         try {
-            const res = await fetch('api/despesas.php?action=toggle', {
+            const res = await fetch(`${API_BASE}despesas.php?action=toggle`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: expenseId })
@@ -292,7 +305,7 @@ const DBService = {
     async rateioConsumo() {
         try {
             const monthYear = this.getCurrentSelectedMonth();
-            const res = await fetch('api/despesas.php?action=rateio', {
+            const res = await fetch(`${API_BASE}despesas.php?action=rateio`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ monthYear })

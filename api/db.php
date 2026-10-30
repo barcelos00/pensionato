@@ -9,6 +9,12 @@ $pass = getenv('DB_PASS') ?: 'uME20ZjColzg';         // Sua senha do Vpanel/Infi
 $dbname = getenv('DB_NAME') ?: 'if0_43289034_XXX'; // Nome do banco com prefixo
 $port = '3306';
 
+    // $host = 'localhost';
+    // $user = 'root';
+    // $pass = '';
+    // $dbname = 'pensionato_db'; // Nome do banco que você criou no seu phpMyAdmin local
+    // $port = '3306';
+
 try {
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

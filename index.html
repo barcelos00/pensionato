@@ -1,145 +1,75 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pensionato Pro - Dashboard</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <meta name="description" content="Encontre casas e quartos disponíveis no Pensionato Pro.">
+  <title>Pensionato Pro | Encontre sua casa</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="js/supabaseClient.js"></script>
+  <script defer src="js/app.js"></script>
 </head>
-<body>
-    <!-- OVERLAY ESCURO ATRÁS DO MENU -->
-    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<body data-page="catalog">
+  <header class="public-header">
+    <a class="brand" href="index.html" aria-label="Pensionato Pro, início">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>Pensionato<span class="brand-light">Pro</span></span>
+    </a>
+    <a class="button button-secondary" href="admin.html">Área administrativa</a>
+  </header>
 
-    <!-- TOPBAR FIXA -->
-    <div class="mobile-topbar">
-        <button type="button" class="btn-hamburger" onclick="toggleSidebar()" aria-label="Abrir Menu">☰</button>
-        <div class="brand" style="margin:0; font-size:1.1rem;">Pensionato <span class="brand-highlight">Pro</span></div>
-    </div>
+  <main class="public-main">
+    <section class="catalog-hero">
+      <p class="eyebrow">SEU PRÓXIMO LAR</p>
+      <h1>Encontre um lugar<br>para chamar de seu.</h1>
+      <p class="page-description">Veja as casas e os quartos disponíveis e fale diretamente com o responsável pelo WhatsApp.</p>
+      <label class="catalog-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="catalog-search" type="search" placeholder="Busque por casa ou bairro" aria-label="Buscar por casa ou bairro">
+      </label>
+    </section>
 
-    <div class="layout-container">
-        <!-- SIDEBAR RETRÁTIL -->
-        <aside id="main-sidebar" class="sidebar-drawer">
-            <div>
-                <div class="brand" style="padding:1.25rem; display:flex; justify-content:space-between; align-items:center;">
-                    <span>Pensionato <span class="brand-highlight">Pro</span></span>
-                    <button type="button" onclick="toggleSidebar()" style="background:none; border:none; color:#94a3b8; font-size:1.5rem; cursor:pointer;">&times;</button>
-                </div>
-                <nav class="nav-list">
-                    <a href="index.html" class="nav-btn active">Dashboard</a>
-                    <a href="quartos.html" class="nav-btn">Casas & Quartos</a>
-                    <a href="inquilinos.html" class="nav-btn">Inquilinos</a>
-                    <a href="despesas.html" class="nav-btn">Contas & Rateio</a>
-                    <a href="relatorios.html" class="nav-btn">Relatórios DRE</a>
-                </nav>
-            </div>
-            <div class="sidebar-footer" style="padding:1.25rem;">
-                <button onclick="DBService.logout()" class="btn-logout" style="width:100%;">Sair do Painel</button>
-            </div>
-        </aside>
+    <section class="notice" id="app-status" role="status" aria-live="polite" hidden></section>
 
-        <main>
-            <!-- SELETOR DE MÊS -->
-            <div class="competence-bar">
-                <div>
-                    <span class="competence-title">Mês de Referência</span>
-                    <div id="today-date-display" class="competence-date"></div>
-                </div>
-                <input type="month" id="month-picker" onchange="handleMonthChange(this.value)" class="input-month">
-            </div>
-
-            <div class="header-title">
-                <div>
-                    <h2>Visão Geral Financeira</h2>
-                    <p>Acompanhamento contábil mensal e inadimplência</p>
-                </div>
-                <button onclick="openModal('modal-tenant')" class="btn-primary">+ Novo Inquilino</button>
-            </div>
-
-            <!-- CARDS DE KPIS EM GRID (2x2 no mobile, 4 em linha no desktop) -->
-            <div class="cards-grid">
-                <div class="card card-kpi">
-                    <span class="card-label">Receita Prevista</span>
-                    <div id="kpi-revenue" class="card-value val-emerald">R$ 0,00</div>
-                </div>
-                <div class="card card-kpi">
-                    <span class="card-label">Despesas Totais</span>
-                    <div id="kpi-expenses" class="card-value val-rose">R$ 0,00</div>
-                </div>
-                <div class="card card-kpi">
-                    <span class="card-label">Lucro Líquido</span>
-                    <div id="kpi-profit" class="card-value val-blue">R$ 0,00</div>
-                </div>
-                <div class="card card-kpi">
-                    <span class="card-label">Ocupação</span>
-                    <div id="kpi-occupancy" class="card-value val-purple">0%</div>
-                    <small id="kpi-occupancy-sub" style="color:var(--text-muted); font-weight:600; font-size:0.7rem;">0 leitos</small>
-                </div>
-            </div>
-
-            <!-- ÁREA DO GRÁFICO E VENCIMENTOS -->
-            <div class="dashboard-content-grid">
-                <div class="card chart-card-wrapper">
-                    <h4 style="margin-bottom:1rem; color:var(--text-dark); font-weight:800;">Comparativo do Mês</h4>
-                    <div class="chart-container-box">
-                        <canvas id="financialChart"></canvas>
-                    </div>
-                </div>
-                <div class="card dues-card-wrapper">
-                    <h4 style="margin-bottom:1rem; color:var(--text-dark); font-weight:800;">Próximos Vencimentos</h4>
-                    <div id="upcoming-dues-list"></div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- Modal Novo Inquilino -->
-    <div id="modal-tenant" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <span>Cadastrar Inquilino</span>
-                <button type="button" onclick="closeModal('modal-tenant')" class="btn-close">&times;</button>
-            </div>
-            <form id="form-tenant" onsubmit="handleCreateTenant(event)" class="modal-body">
-                <div class="form-group"><label>Nome Completo</label><input type="text" id="tenant-name" required class="form-control"></div>
-                <div class="form-group"><label>Telefone / WhatsApp</label><input type="text" id="tenant-phone" required class="form-control"></div>
-                <div class="grid-2-form">
-                    <div class="form-group"><label>Aluguel (R$)</label><input type="number" step="0.01" id="tenant-rent" required class="form-control"></div>
-                    <div class="form-group"><label>Dia Vencimento</label><input type="number" min="1" max="31" id="tenant-due" value="10" required class="form-control"></div>
-                </div>
-                <div class="form-group"><label>Alocar no Leito Vago</label><select id="tenant-bed-select" required class="form-control"></select></div>
-                <div class="modal-actions">
-                    <button type="button" onclick="closeModal('modal-tenant')" class="btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn-primary">Salvar Inquilino</button>
-                </div>
-            </form>
+    <section id="catalog-view" aria-labelledby="catalog-heading">
+      <div class="section-toolbar">
+        <div>
+          <p class="eyebrow">DISPONÍVEIS AGORA</p>
+          <h2 id="catalog-heading">Casas para conhecer</h2>
         </div>
-    </div>
+        <span class="result-count" id="catalog-count"></span>
+      </div>
+      <div class="house-grid public-house-grid" id="catalog-houses">
+        <p class="empty-state">Carregando casas disponíveis...</p>
+      </div>
+    </section>
 
-    <!-- Modal PIX (Adicionado para garantir compatibilidade caso acionado da dashboard) -->
-    <div id="modal-pix" class="modal-overlay">
-        <div class="modal-card" style="text-align:center;">
-            <div class="modal-header"><span>Cobrança via PIX</span><button type="button" onclick="closeModal('modal-pix')" class="btn-close">&times;</button></div>
-            <div class="modal-body">
-                <p>Inquilino: <strong id="pix-tenant-name">---</strong></p>
-                <p style="font-size:1.2rem; color:#10b981; font-weight:bold; margin-bottom:1rem;">Valor: <span id="pix-amount">R$ 0,00</span></p>
-                <div id="pix-qrcode" style="display:flex; justify-content:center; margin:1rem 0;"></div>
-                <small style="color:#64748b;">Escaneie o QR Code acima para pagar.</small>
-            </div>
-            <div class="modal-actions" style="justify-content:center;"><button type="button" onclick="closeModal('modal-pix')" class="btn-secondary">Fechar</button></div>
+    <section class="catalog-detail" id="catalog-detail" aria-labelledby="catalog-house-name" hidden>
+      <button class="back-link" id="catalog-back" type="button">← Todas as casas</button>
+      <article class="house-detail-card" id="catalog-house"></article>
+      <div class="section-toolbar room-toolbar">
+        <div>
+          <p class="eyebrow">VAGAS DISPONÍVEIS</p>
+          <h2 id="catalog-rooms-heading">Quartos desta casa</h2>
         </div>
-    </div>
+        <span class="result-count" id="catalog-room-count"></span>
+      </div>
+      <div class="room-grid" id="catalog-rooms">
+        <p class="empty-state">Carregando quartos...</p>
+      </div>
+      <div class="contact-panel" id="contact-panel">
+        <div>
+          <p class="eyebrow">GOSTOU DESTA CASA?</p>
+          <h2>Fale com o responsável</h2>
+          <p class="page-description">Tire suas dúvidas e combine uma visita diretamente pelo WhatsApp.</p>
+        </div>
+        <a class="button button-whatsapp" id="whatsapp-contact" href="#" target="_blank" rel="noopener noreferrer">Conversar no WhatsApp</a>
+      </div>
+    </section>
 
-    <script src="js/state.js"></script>
-    <script src="js/components.js"></script>
-    <script src="js/app.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", async () => {
-            DBService.checkAuth();
-            initDatePickers();
-            await renderDashboard();
-        });
-    </script>
+    <footer class="page-footer public-footer">Pensionato Pro <span>Encontre seu próximo lar.</span></footer>
+  </main>
 </body>
-</html> 
+</html>

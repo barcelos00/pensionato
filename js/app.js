@@ -1,4 +1,5 @@
 const supabaseClient = window.pensionatoSupabase;
+const publicSupabaseClient = window.pensionatoPublicSupabase;
 const page = document.body.dataset.page;
 const statusNotice = document.getElementById("app-status");
 const HOUSE_PHOTO_BUCKET = "pensionato-uploads";
@@ -20,6 +21,50 @@ let housePreviewObjectUrl = null;
 let catalogHouses = [];
 let catalogWhatsAppNumber = "";
 let catalogSearchTerm = "";
+let catalogRefreshInProgress = false;
+
+function initializeTheme() {
+  const storageKey = "pensionato-theme";
+  let theme = "light";
+  try {
+    theme = localStorage.getItem(storageKey) || "light";
+  } catch (error) {
+    showStatus(`Não foi possível carregar a preferência de tema. ${error.message || ""}`, "warning");
+  }
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+
+  const button = makeElement("button", "button button-secondary theme-toggle");
+  button.type = "button";
+  const updateButton = () => {
+    const isDark = document.documentElement.dataset.theme === "dark";
+    button.textContent = isDark ? "☀ Modo claro" : "☾ Modo noturno";
+    button.setAttribute("aria-pressed", String(isDark));
+    button.setAttribute("aria-label", isDark ? "Ativar modo claro" : "Ativar modo noturno");
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = isDark ? "#101713" : "#e9ede9";
+  };
+  updateButton();
+
+  button.addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    updateButton();
+    try {
+      localStorage.setItem(storageKey, nextTheme);
+    } catch (error) {
+      showStatus(`O tema foi alterado, mas não será salvo neste navegador. ${error.message || ""}`, "warning");
+    }
+  });
+
+  const sidebar = document.querySelector(".sidebar");
+  const publicHeader = document.querySelector(".public-header");
+  if (sidebar) {
+    const note = sidebar.querySelector(".sidebar-note");
+    sidebar.insertBefore(button, note);
+  } else if (publicHeader) {
+    publicHeader.append(button);
+  }
+}
 
 function showStatus(message, type = "warning") {
   if (!statusNotice) return;
@@ -100,6 +145,22 @@ function showConfigurationState() {
       makeElement("p", "empty-state", "O catálogo ainda não está configurado.")
     );
   }
+
+  if (page === "inquilinos") {
+    showAdminPageConfiguration("tenant-panel", "add-tenant-button");
+  }
+
+  if (page === "financeiro") {
+    showAdminPageConfiguration("finance-content", "add-expense-button");
+  }
+}
+
+function showAdminPageConfiguration(contentId, actionId) {
+  const content = document.getElementById(contentId);
+  const action = document.getElementById(actionId);
+  if (content) content.hidden = true;
+  if (action) action.disabled = true;
+  showStatus(window.pensionatoSupabaseError || "O cliente do Supabase não está configurado.");
 }
 
 function getWhatsAppUrl(house) {
@@ -111,13 +172,17 @@ function getWhatsAppUrl(house) {
 }
 
 async function loadCatalog() {
+  if (!publicSupabaseClient) {
+    throw new Error("O cliente público do Supabase não foi inicializado.");
+  }
+
   const [settingsResult, housesResult] = await Promise.all([
-    supabaseClient
+    publicSupabaseClient
       .from("configuracoes_publicas")
       .select("whatsapp_numero")
       .eq("id", 1)
       .maybeSingle(),
-    supabaseClient
+    publicSupabaseClient
       .from("casas")
       .select("id, nome, bairro, foto_url")
       .eq("disponivel", true)
@@ -130,7 +195,7 @@ async function loadCatalog() {
   catalogWhatsAppNumber = settingsResult.data?.whatsapp_numero ?? "";
   catalogHouses = housesResult.data ?? [];
   if (catalogHouses.length) {
-    const { data: availableRooms, error } = await supabaseClient
+    const { data: availableRooms, error } = await publicSupabaseClient
       .from("quartos")
       .select("casa_id")
       .eq("disponivel", true)
@@ -153,7 +218,18 @@ async function loadCatalog() {
   renderCatalogHouses();
 
   const houseId = new URLSearchParams(window.location.search).get("casa");
-  if (houseId) await openCatalogHouse(houseId, false);
+  if (!houseId) return;
+  if (catalogHouses.some((house) => String(house.id) === houseId)) {
+    await openCatalogHouse(houseId, false);
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete("casa");
+  window.history.replaceState({}, "", url);
+  document.getElementById("catalog-detail").hidden = true;
+  document.getElementById("catalog-view").hidden = false;
+  showStatus("Esta casa não está mais disponível no catálogo.", "warning");
 }
 
 function renderCatalogHouses() {
@@ -283,7 +359,7 @@ async function openCatalogHouse(houseId, updateUrl = true) {
     makeElement("p", "empty-state", "Carregando quartos disponíveis...")
   );
 
-  const { data, error } = await supabaseClient
+  const { data, error } = await publicSupabaseClient
     .from("quartos")
     .select("id, casa_id, numero, andar, tipo_mobilia, valor_base, foto_url, features")
     .eq("casa_id", house.id)
@@ -321,6 +397,22 @@ function bindCatalogEvents() {
       openCatalogHouse(houseId, false);
     }
   });
+
+  const refreshCatalog = async () => {
+    if (catalogRefreshInProgress) return;
+    catalogRefreshInProgress = true;
+    try {
+      await loadCatalog();
+    } catch (error) {
+      showLoadError(error);
+    } finally {
+      catalogRefreshInProgress = false;
+    }
+  };
+  window.addEventListener("focus", refreshCatalog);
+  window.setInterval(() => {
+    if (!document.hidden) refreshCatalog();
+  }, 60_000);
 }
 
 async function getCount(table) {
@@ -871,6 +963,633 @@ async function handleAdminSession(session) {
   }
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function localDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year").value;
+  const month = parts.find((part) => part.type === "month").value;
+  const day = parts.find((part) => part.type === "day").value;
+  return `${year}-${month}-${day}`;
+}
+
+function getLocalMonthString(date = new Date()) {
+  return localDateString(date).slice(0, 7);
+}
+
+function formatBrazilianMonth(month) {
+  const [year, monthNumber] = month.split("-");
+  return `${monthNumber}/${year}`;
+}
+
+function getFinanceMonthString() {
+  const value = document.getElementById("finance-month").value.trim();
+  const match = /^(0[1-9]|1[0-2])\/(\d{4})$/.exec(value);
+  if (!match) throw new Error("Informe o mês de referência no formato MM/AAAA.");
+  return `${match[2]}-${match[1]}`;
+}
+
+function setAdminSignOut() {
+  const button = document.getElementById("admin-signout");
+  button.hidden = false;
+  button.addEventListener("click", async () => {
+    try {
+      await signOutAdmin();
+    } catch (error) {
+      showStatus(`Não foi possível encerrar a sessão. ${error.message || ""}`, "error");
+    }
+  });
+}
+
+async function guardAdminPage(contentId, actionIds = []) {
+  const session = await getAdminSession();
+  if (!session) {
+    showStatus("Entre com sua conta de administrador pelo painel administrativo para continuar.");
+    actionIds.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) element.disabled = true;
+    });
+    return false;
+  }
+  if (!userIsAdmin(session.user)) {
+    showStatus("Esta conta não tem permissão de administrador.", "error");
+    actionIds.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) element.disabled = true;
+    });
+    return false;
+  }
+
+  const content = document.getElementById(contentId);
+  if (content) content.hidden = false;
+  setAdminSignOut();
+  return true;
+}
+
+function nullableFormValue(formData, name) {
+  const value = formData.get(name);
+  return value ? String(value).trim() || null : null;
+}
+
+function bindTenantFormEvents() {
+  const modeSelect = document.getElementById("tenant-mode");
+  const expenseRule = document.querySelector('#tenant-form [name="despesas_regra"]');
+  const form = document.getElementById("tenant-form");
+
+  modeSelect.addEventListener("change", () => {
+    const isMonthly = modeSelect.value === "mensal";
+    document.querySelectorAll(".monthly-field").forEach((field) => {
+      field.hidden = !isMonthly;
+      field.querySelector("input").required = isMonthly;
+    });
+    document.getElementById("tenant-rate-label").textContent =
+      isMonthly ? "Aluguel mensal (R$) *" : "Valor por noite (R$) *";
+  });
+
+  expenseRule.addEventListener("change", () => {
+    const details = document.getElementById("expense-rule-details");
+    details.hidden = expenseRule.value !== "outra";
+  });
+
+  form.addEventListener("submit", saveTenantOccupancy);
+  document.getElementById("add-tenant-button").addEventListener("click", async () => {
+    try {
+      await loadTenantRoomOptions();
+      form.reset();
+      modeSelect.dispatchEvent(new Event("change"));
+      document.getElementById("expense-rule-details").hidden = true;
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      form.elements.namedItem("data_inicio").value = localDateString(tomorrow);
+      const monthLater = new Date(tomorrow);
+      monthLater.setMonth(monthLater.getMonth() + 6);
+      form.elements.namedItem("data_fim").value = localDateString(monthLater);
+      document.getElementById("tenant-dialog").showModal();
+      form.elements.namedItem("nome").focus();
+    } catch (error) {
+      showLoadError(error);
+    }
+  });
+
+  document.querySelectorAll('[data-close-dialog="tenant-dialog"]').forEach((button) => {
+    button.addEventListener("click", () => document.getElementById("tenant-dialog").close());
+  });
+}
+
+async function loadTenantRoomOptions() {
+  const select = document.getElementById("tenant-room-select");
+  const { data, error } = await supabaseClient
+    .from("quartos")
+    .select("id, numero, casas(nome, bairro)")
+    .order("numero", { ascending: true });
+  if (error) throw error;
+
+  select.replaceChildren(makeElement("option", "", "Selecione um quarto"));
+  select.options[0].value = "";
+  (data ?? []).forEach((room) => {
+    const house = Array.isArray(room.casas) ? room.casas[0] : room.casas;
+    const option = makeElement(
+      "option",
+      "",
+      `${house?.nome || "Casa"} · Quarto ${room.numero}${house?.bairro ? ` · ${house.bairro}` : ""}`
+    );
+    option.value = String(room.id);
+    select.append(option);
+  });
+
+  if (!data?.length) {
+    select.replaceChildren(makeElement("option", "", "Cadastre um quarto antes de criar a locação"));
+    select.options[0].value = "";
+  }
+}
+
+async function loadTenantOccupancies() {
+  const { data, error } = await supabaseClient
+    .from("locacoes")
+    .select("id, modalidade, data_inicio, data_fim, valor, despesas_regra, despesas_descricao, status, inquilinos(nome, telefone, email), quartos(numero, casas(nome))")
+    .eq("status", "ativa")
+    .order("data_inicio", { ascending: false });
+  if (error) throw error;
+
+  const today = localDateString();
+  const currentOrUpcoming = (data ?? []).filter((occupancy) =>
+    occupancy.modalidade === "diaria"
+      ? occupancy.data_fim > today
+      : occupancy.data_fim >= today
+  );
+  renderTenantOccupancies(currentOrUpcoming);
+}
+
+function renderTenantOccupancies(occupancies) {
+  const tableBody = document.getElementById("tenant-list");
+  const count = document.getElementById("tenant-count");
+  tableBody.replaceChildren();
+  count.textContent = `${occupancies.length} ${occupancies.length === 1 ? "locação" : "locações"}`;
+
+  if (!occupancies.length) {
+    const row = document.createElement("tr");
+    const cell = makeElement("td", "empty-state", "Nenhuma locação ativa. Cadastre uma para começar a controlar os recebimentos.");
+    cell.colSpan = 7;
+    row.append(cell);
+    tableBody.append(row);
+    return;
+  }
+
+  occupancies.forEach((occupancy) => {
+    const tenant = Array.isArray(occupancy.inquilinos) ? occupancy.inquilinos[0] : occupancy.inquilinos;
+    const room = Array.isArray(occupancy.quartos) ? occupancy.quartos[0] : occupancy.quartos;
+    const house = Array.isArray(room?.casas) ? room.casas[0] : room?.casas;
+    const row = document.createElement("tr");
+    const renterCell = makeElement("td");
+    renterCell.append(makeElement("strong", "table-primary-text", tenant?.nome || "Inquilino"));
+    if (tenant?.telefone) renterCell.append(makeElement("small", "table-secondary-text", tenant.telefone));
+    const locationCell = makeElement("td");
+    locationCell.append(makeElement("strong", "table-primary-text", house?.nome || "Casa"));
+    locationCell.append(makeElement("small", "table-secondary-text", `Quarto ${room?.numero || "—"}`));
+    const ruleLabels = {
+      incluidas: "Inclusas",
+      rateio: "Rateio igual",
+      outra: occupancy.despesas_descricao || "Outra forma"
+    };
+    const closeButton = makeElement("button", "button button-secondary button-small", "Encerrar");
+    closeButton.type = "button";
+    closeButton.addEventListener("click", () => endTenantOccupancy(occupancy));
+    const cells = [
+      renterCell,
+      locationCell,
+      makeElement("td", "", occupancy.modalidade === "mensal" ? "Mensal" : "Diária"),
+      makeElement("td", "", `${formatCurrency(occupancy.valor)}${occupancy.modalidade === "diaria" ? " / noite" : " / mês"}`),
+      makeElement("td", "", `${formatDate(occupancy.data_inicio)} – ${formatDate(occupancy.data_fim)}`),
+      makeElement("td", "", ruleLabels[occupancy.despesas_regra] || "—"),
+      makeElement("td")
+    ];
+    cells[0].className = "";
+    cells[1].className = "";
+    cells[6].append(closeButton);
+    cells.forEach((cell) => {
+      if (cell.tagName !== "TD") {
+        const wrapper = makeElement("td");
+        wrapper.append(cell);
+        row.append(wrapper);
+      } else {
+        row.append(cell);
+      }
+    });
+    tableBody.append(row);
+  });
+}
+
+async function saveTenantOccupancy(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = new FormData(form);
+  const start = values.get("data_inicio");
+  const end = values.get("data_fim");
+  const rate = Number(values.get("valor"));
+  if (!start || !end || end <= start) {
+    showStatus("A data final deve ser posterior à data inicial.", "error");
+    return;
+  }
+  if (!Number.isFinite(rate) || rate <= 0) {
+    showStatus("Informe um valor maior que zero.", "error");
+    return;
+  }
+  if (values.get("modalidade") === "diaria") {
+    const nights = Math.round((new Date(`${end}T00:00:00`) - new Date(`${start}T00:00:00`)) / 86400000);
+    if (nights < 1) {
+      showStatus("A locação diária precisa ter pelo menos uma noite.", "error");
+      return;
+    }
+  }
+
+  const tenant = {
+    nome: String(values.get("nome")).trim(),
+    telefone: String(values.get("telefone")).trim(),
+    email: nullableFormValue(values, "email"),
+    nascimento: nullableFormValue(values, "nascimento"),
+    cpf: nullableFormValue(values, "cpf"),
+    rg: nullableFormValue(values, "rg"),
+    rg_data_expedicao: nullableFormValue(values, "rg_data_expedicao"),
+    estado_civil: nullableFormValue(values, "estado_civil"),
+    profissao: nullableFormValue(values, "profissao"),
+    empresa_trabalho: nullableFormValue(values, "empresa_trabalho"),
+    endereco: nullableFormValue(values, "endereco")
+  };
+  const occupancy = {
+    quarto_id: Number(values.get("quarto_id")),
+    modalidade: values.get("modalidade"),
+    data_inicio: start,
+    data_fim: end,
+    valor: rate,
+    dia_vencimento: values.get("modalidade") === "mensal" ? Number(values.get("dia_vencimento")) : 10,
+    taxa_contrato: Number(values.get("taxa_contrato") || 0),
+    forma_pagamento: values.get("forma_pagamento"),
+    despesas_regra: values.get("despesas_regra"),
+    despesas_descricao: nullableFormValue(values, "despesas_descricao"),
+    multa_percentual: Number(values.get("multa_percentual") || 0),
+    juros_percentual: Number(values.get("juros_percentual") || 0),
+    aviso_rescisao_dias: Number(values.get("aviso_rescisao_dias") || 0),
+    fiador_nome: nullableFormValue(values, "fiador_nome"),
+    fiador_nascimento: nullableFormValue(values, "fiador_nascimento"),
+    fiador_cpf: nullableFormValue(values, "fiador_cpf"),
+    fiador_rg: nullableFormValue(values, "fiador_rg"),
+    fiador_telefone: nullableFormValue(values, "fiador_telefone"),
+    fiador_estado_civil: nullableFormValue(values, "fiador_estado_civil"),
+    fiador_profissao: nullableFormValue(values, "fiador_profissao"),
+    fiador_endereco: nullableFormValue(values, "fiador_endereco"),
+    fiador_conjuge_nome: nullableFormValue(values, "fiador_conjuge_nome"),
+    fiador_conjuge_cpf: nullableFormValue(values, "fiador_conjuge_cpf")
+  };
+  if (!occupancy.quarto_id || !Number.isFinite(occupancy.taxa_contrato) || occupancy.taxa_contrato < 0) {
+    showStatus("Selecione um quarto e confira a taxa de contrato.", "error");
+    return;
+  }
+
+  const submitButton = form.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    const { data, error } = await supabaseClient.rpc("criar_locacao_financeira", {
+      p_inquilino: tenant,
+      p_locacao: occupancy
+    });
+    if (error) throw error;
+    if (!data?.locacao_id) throw new Error("O banco não retornou o identificador da locação.");
+
+    document.getElementById("tenant-dialog").close();
+    await loadTenantOccupancies();
+    showStatus(`Locação registrada. ${data.cobrancas_geradas} cobrança(s) criada(s) automaticamente. O contrato formal continua sendo tratado fora do sistema.`, "success");
+  } catch (error) {
+    showStatus(`Não foi possível cadastrar a locação. ${error.message || ""}`, "error");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function endTenantOccupancy(occupancy) {
+  if (!window.confirm("Encerrar esta locação e cancelar cobranças futuras ainda pendentes?")) return;
+  const today = localDateString();
+  try {
+    const { data, error } = await supabaseClient.rpc("encerrar_locacao_financeira", {
+      p_locacao_id: occupancy.id,
+      p_data_corte: today
+    });
+    if (error) throw error;
+    await loadTenantOccupancies();
+    const canceledCount = Number(data?.cobrancas_canceladas || 0);
+    showStatus(
+      `Locação encerrada. ${canceledCount} cobrança(s) futura(s) pendente(s) cancelada(s).`,
+      "success"
+    );
+  } catch (error) {
+    showStatus(`Não foi possível encerrar a locação. ${error.message || ""}`, "error");
+  }
+}
+
+async function initTenantPage() {
+  if (!(await guardAdminPage("tenant-panel", ["add-tenant-button"]))) return;
+  bindTenantFormEvents();
+  document.getElementById("tenant-panel").hidden = false;
+  document.getElementById("add-tenant-button").hidden = false;
+  await loadTenantOccupancies();
+}
+
+function renderFinanceTransactions(receivables, expenses) {
+  const body = document.getElementById("finance-entry-list");
+  const rows = [
+    ...receivables.map((item) => ({
+      id: item.id,
+      kind: "recebimento",
+      description: item.descricao,
+      category: item.categoria,
+      amount: Number(item.valor),
+      dueDate: item.data_vencimento,
+      status: item.status,
+      source: item
+    })),
+    ...expenses.map((item) => ({
+      id: item.id,
+      kind: "despesa",
+      description: item.titulo,
+      category: item.categoria,
+      amount: Number(item.valor),
+      dueDate: item.data_vencimento,
+      status: item.status,
+      source: item
+    }))
+  ].sort((a, b) => String(b.dueDate).localeCompare(String(a.dueDate)));
+  body.replaceChildren();
+  document.getElementById("finance-entry-count").textContent =
+    `${rows.length} ${rows.length === 1 ? "movimentação" : "movimentações"}`;
+
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = makeElement("td", "empty-state", "Nenhuma movimentação neste mês.");
+    cell.colSpan = 7;
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+
+  rows.forEach((item) => {
+    const row = document.createElement("tr");
+    const isPaid = item.status === "Pago";
+    const isOverdue = item.status === "Pendente" && item.dueDate < localDateString();
+    const kind = makeElement(
+      "span",
+      `transaction-kind ${item.kind === "recebimento" ? "kind-income" : "kind-expense"}`,
+      item.kind === "recebimento" ? "Entrada" : "Saída"
+    );
+    const status = makeElement(
+      "span",
+      `transaction-status ${isPaid ? "status-paid" : isOverdue ? "status-overdue" : item.status === "Cancelado" ? "status-cancelled" : "status-pending"}`,
+      isOverdue ? "Atrasado" : item.status
+    );
+    const descriptionCell = makeElement("td");
+    descriptionCell.append(makeElement("strong", "table-primary-text", item.description));
+    const categoryCell = makeElement("td", "transaction-category", String(item.category).replaceAll("_", " "));
+    const actionCell = makeElement("td");
+
+    if (!isPaid && item.status !== "Cancelado") {
+      const button = makeElement("button", "button button-secondary button-small", "Marcar pago");
+      button.type = "button";
+      button.addEventListener("click", () => markFinanceEntryPaid(item));
+      actionCell.append(button);
+    } else {
+      actionCell.textContent = item.status === "Pago" && item.source.data_pagamento
+        ? formatDate(item.source.data_pagamento)
+        : "—";
+    }
+
+    row.append(
+      makeElement("td", "", ""),
+      descriptionCell,
+      categoryCell,
+      makeElement("td", "money-cell", formatCurrency(item.amount)),
+      makeElement("td", "", formatDate(item.dueDate)),
+      makeElement("td", "").appendChild(status).parentElement,
+      actionCell
+    );
+    row.firstElementChild.append(kind);
+    body.append(row);
+  });
+}
+
+function renderExpenseCategorySummary(expenses) {
+  const container = document.getElementById("expense-category-summary");
+  const totals = new Map();
+  expenses.forEach((expense) => {
+    totals.set(expense.categoria, (totals.get(expense.categoria) ?? 0) + Number(expense.valor));
+  });
+  const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0);
+  document.getElementById("expense-breakdown-total").textContent = formatCurrency(total);
+  container.replaceChildren();
+
+  if (!totals.size) {
+    container.append(makeElement("p", "empty-state", "Nenhuma despesa neste mês."));
+    return;
+  }
+
+  [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([category, amount]) => {
+      const row = makeElement("div", "expense-category-row");
+      const heading = makeElement("div", "expense-category-heading");
+      heading.append(
+        makeElement("span", "", category.replaceAll("_", " ")),
+        makeElement("strong", "", formatCurrency(amount))
+      );
+      const track = makeElement("div", "expense-category-track");
+      const fill = makeElement("span", "expense-category-fill");
+      fill.style.width = `${total ? Math.max(2, amount / total * 100) : 0}%`;
+      track.append(fill);
+      row.append(heading, track);
+      container.append(row);
+    });
+}
+
+async function loadFinanceDashboard() {
+  const month = getFinanceMonthString();
+  const [receiptsResult, expensesResult] = await Promise.all([
+    supabaseClient
+      .from("recebimentos")
+      .select("id, locacao_id, inquilino_id, categoria, descricao, valor, data_vencimento, mes_referencia, status, data_pagamento")
+      .eq("mes_referencia", month),
+    supabaseClient
+      .from("despesas")
+      .select("id, titulo, valor, categoria, tipo, status, mes_referencia, data_vencimento, data_pagamento, ratear")
+      .eq("mes_referencia", month)
+  ]);
+  if (receiptsResult.error) throw receiptsResult.error;
+  if (expensesResult.error) throw expensesResult.error;
+
+  const receipts = receiptsResult.data ?? [];
+  const expenses = expensesResult.data ?? [];
+  const paidReceipts = receipts.filter((entry) => entry.status === "Pago");
+  const pendingReceipts = receipts.filter((entry) => entry.status === "Pendente");
+  const overdueReceipts = pendingReceipts.filter((entry) => entry.data_vencimento < localDateString());
+  const paidExpenses = expenses.filter((entry) => entry.status === "Pago");
+  const sum = (items) => items.reduce((total, entry) => total + Number(entry.valor || 0), 0);
+
+  document.getElementById("finance-income-paid").textContent = formatCurrency(sum(paidReceipts));
+  document.getElementById("finance-income-count").textContent =
+    `${paidReceipts.length} ${paidReceipts.length === 1 ? "pagamento confirmado" : "pagamentos confirmados"}`;
+  document.getElementById("finance-income-pending").textContent = formatCurrency(sum(pendingReceipts));
+  document.getElementById("finance-overdue-count").textContent =
+    `${pendingReceipts.length} pendentes · ${overdueReceipts.length} atrasadas`;
+  document.getElementById("finance-expenses-paid").textContent = formatCurrency(sum(paidExpenses));
+  document.getElementById("finance-expenses-count").textContent =
+    `${paidExpenses.length} ${paidExpenses.length === 1 ? "despesa paga" : "despesas pagas"} · ${expenses.filter((entry) => entry.status === "Pendente").length} pendentes`;
+  document.getElementById("finance-balance").textContent =
+    formatCurrency(sum(paidReceipts) - sum(paidExpenses));
+  renderExpenseCategorySummary(expenses);
+  renderFinanceTransactions(receipts, expenses);
+}
+
+async function markFinanceEntryPaid(entry) {
+  const today = localDateString();
+  const table = entry.kind === "recebimento" ? "recebimentos" : "despesas";
+  const payload = entry.kind === "recebimento"
+    ? { status: "Pago", data_pagamento: today, atualizado_em: new Date().toISOString() }
+    : { status: "Pago", data_pagamento: today, atualizado_em: new Date().toISOString() };
+
+  try {
+    const { data, error } = await supabaseClient
+      .from(table)
+      .update(payload)
+      .eq("id", entry.id)
+      .eq("status", "Pendente")
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("A movimentação não foi encontrada ou já foi atualizada.");
+    await loadFinanceDashboard();
+    showStatus("Pagamento registrado.", "success");
+  } catch (error) {
+    showStatus(`Não foi possível atualizar o pagamento. ${error.message || ""}`, "error");
+  }
+}
+
+function bindExpenseFormEvents() {
+  const form = document.getElementById("expense-form");
+  const status = form.elements.namedItem("status");
+  status.addEventListener("change", () => {
+    const dateField = document.getElementById("expense-payment-date-field");
+    dateField.hidden = status.value !== "Pago";
+    if (status.value === "Pago" && !form.elements.namedItem("data_pagamento").value) {
+      form.elements.namedItem("data_pagamento").value = localDateString();
+    }
+  });
+
+  document.getElementById("add-expense-button").addEventListener("click", () => {
+    let month;
+    try {
+      month = getFinanceMonthString();
+    } catch (error) {
+      showStatus(error.message, "error");
+      return;
+    }
+    form.reset();
+    const [year, monthNumber] = (month || getLocalMonthString()).split("-").map(Number);
+    const currentDay = Number(localDateString().slice(-2));
+    const dueDay = Math.min(currentDay, new Date(year, monthNumber, 0).getDate());
+    form.elements.namedItem("data_vencimento").value =
+      `${month || getLocalMonthString()}-${String(dueDay).padStart(2, "0")}`;
+    document.getElementById("expense-payment-date-field").hidden = true;
+    document.getElementById("expense-dialog").showModal();
+    form.elements.namedItem("titulo").focus();
+  });
+
+  document.querySelectorAll('[data-close-dialog="expense-dialog"]').forEach((button) => {
+    button.addEventListener("click", () => document.getElementById("expense-dialog").close());
+  });
+
+  form.addEventListener("submit", saveFinanceExpense);
+}
+
+async function saveFinanceExpense(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = new FormData(form);
+  const amount = Number(values.get("valor"));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showStatus("Informe um valor maior que zero para a despesa.", "error");
+    return;
+  }
+
+  const payload = {
+    titulo: String(values.get("titulo")).trim(),
+    categoria: values.get("categoria"),
+    tipo: values.get("tipo"),
+    valor: amount,
+    data_vencimento: values.get("data_vencimento"),
+    status: values.get("status"),
+    data_pagamento: values.get("status") === "Pago"
+      ? nullableFormValue(values, "data_pagamento") || localDateString()
+      : null,
+    ratear: values.get("ratear") === "on"
+  };
+  if (!payload.data_vencimento) {
+    showStatus("Informe a data de vencimento da despesa.", "error");
+    return;
+  }
+
+  const submitButton = form.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    const { data, error } = await supabaseClient.rpc("registrar_despesa_financeira", {
+      p_despesa: payload
+    });
+    if (error) throw error;
+    if (!data?.despesa_id) throw new Error("O banco não retornou o identificador da despesa.");
+    document.getElementById("expense-dialog").close();
+    await loadFinanceDashboard();
+    const splitCount = Number(data.locacoes_rateadas || 0);
+    showStatus(
+      splitCount
+        ? `Despesa registrada e rateada entre ${splitCount} locações.`
+        : payload.ratear
+          ? "Despesa registrada. Não havia locações ativas com rateio separado para receber a cobrança."
+          : "Despesa registrada.",
+      "success"
+    );
+  } catch (error) {
+    showStatus(`Não foi possível registrar a despesa. ${error.message || ""}`, "error");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function initFinancePage() {
+  if (!(await guardAdminPage("finance-content", ["add-expense-button"]))) return;
+  document.getElementById("finance-content").hidden = false;
+  document.getElementById("add-expense-button").hidden = false;
+  bindExpenseFormEvents();
+
+  const monthInput = document.getElementById("finance-month");
+  monthInput.value = formatBrazilianMonth(getLocalMonthString());
+  monthInput.addEventListener("change", async () => {
+    try {
+      await loadFinanceDashboard();
+      clearStatus();
+    } catch (error) {
+      showLoadError(error);
+    }
+  });
+  await loadFinanceDashboard();
+}
+
 async function initAdmin() {
   document.getElementById("copy-admin-sql").addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -1039,6 +1758,8 @@ async function start() {
     }
     if (page === "admin") await initAdmin();
     if (page === "quartos") await initAccommodations();
+    if (page === "inquilinos") await initTenantPage();
+    if (page === "financeiro") await initFinancePage();
   } catch (error) {
     showLoadError(error);
     if (page === "dashboard") {
@@ -1059,7 +1780,22 @@ async function start() {
     if (page === "admin") {
       showStatus(`O painel precisa da migração do catálogo no Supabase. ${error.message || ""}`, "error");
     }
+    if (page === "inquilinos") {
+      const row = document.createElement("tr");
+      const cell = makeElement("td", "empty-state", "Não foi possível carregar as locações. Execute sql/financeiro-locacoes.sql no Supabase.");
+      cell.colSpan = 7;
+      row.append(cell);
+      document.getElementById("tenant-list").replaceChildren(row);
+    }
+    if (page === "financeiro") {
+      const row = document.createElement("tr");
+      const cell = makeElement("td", "empty-state", "Não foi possível carregar o financeiro. Execute sql/financeiro-locacoes.sql no Supabase.");
+      cell.colSpan = 7;
+      row.append(cell);
+      document.getElementById("finance-entry-list").replaceChildren(row);
+    }
   }
 }
 
+initializeTheme();
 start();

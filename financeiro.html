@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9ede9">
+  <title>Pensionato Pro | Financeiro</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="js/supabaseClient.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body data-page="financeiro">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="admin.html" aria-label="Pensionato Pro, administração">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span>Pensionato<span class="brand-light">Pro</span></span>
+      </a>
+      <nav class="navigation" aria-label="Navegação administrativa">
+        <a class="nav-link" href="admin.html"><span aria-hidden="true">⌂</span> Painel admin</a>
+        <a class="nav-link" href="quartos.html"><span aria-hidden="true">▦</span> Casas e quartos</a>
+        <a class="nav-link" href="inquilinos.html"><span aria-hidden="true">♙</span> Inquilinos</a>
+        <a class="nav-link is-active" href="financeiro.html" aria-current="page"><span aria-hidden="true">$</span> Financeiro</a>
+        <a class="nav-link" href="index.html"><span aria-hidden="true">↗</span> Catálogo público</a>
+      </nav>
+      <p class="sidebar-note">Resumo mensal de recebimentos e despesas.</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">CONTROLE DO PENSIONATO</p>
+          <h1>Financeiro</h1>
+          <p class="page-description">Acompanhe cobranças, pagamentos recebidos e despesas mensais.</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button button-secondary" id="admin-signout" type="button" hidden>Sair</button>
+          <button class="button button-primary" id="add-expense-button" type="button" hidden>+ Nova despesa</button>
+        </div>
+      </header>
+
+      <section class="notice" id="app-status" role="status" aria-live="polite" hidden></section>
+
+      <section class="finance-content" id="finance-content" hidden>
+        <div class="finance-toolbar">
+          <label class="month-picker">
+            <span>Mês de referência</span>
+            <input id="finance-month" type="text" inputmode="numeric" autocomplete="off" placeholder="MM/AAAA" maxlength="7" pattern="(0[1-9]|1[0-2])/[0-9]{4}" aria-describedby="finance-month-hint">
+            <small id="finance-month-hint">Digite no formato mês/ano (MM/AAAA).</small>
+          </label>
+          <a class="text-link" href="inquilinos.html">Gerenciar locações →</a>
+        </div>
+
+        <section class="stats-grid finance-stats" aria-label="Resumo financeiro do mês">
+          <article class="stat-card">
+            <span class="stat-label">Recebido</span>
+            <strong class="stat-value" id="finance-income-paid">R$ 0,00</strong>
+            <span class="stat-caption" id="finance-income-count">Pagamentos confirmados</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">A receber</span>
+            <strong class="stat-value" id="finance-income-pending">R$ 0,00</strong>
+            <span class="stat-caption" id="finance-overdue-count">Cobranças pendentes</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Despesas pagas</span>
+            <strong class="stat-value" id="finance-expenses-paid">R$ 0,00</strong>
+            <span class="stat-caption" id="finance-expenses-count">Pagamentos confirmados</span>
+          </article>
+          <article class="stat-card stat-card-highlight">
+            <span class="stat-label">Saldo realizado</span>
+            <strong class="stat-value" id="finance-balance">R$ 0,00</strong>
+            <span class="stat-caption">Recebido menos despesas pagas</span>
+          </article>
+        </section>
+
+        <section class="panel expense-breakdown-panel" aria-labelledby="expense-breakdown-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SAÍDAS DO MÊS</p>
+              <h2 id="expense-breakdown-heading">Despesas por categoria</h2>
+            </div>
+            <strong class="breakdown-total" id="expense-breakdown-total">R$ 0,00</strong>
+          </div>
+          <div class="expense-breakdown" id="expense-category-summary">
+            <p class="empty-state">Carregando despesas...</p>
+          </div>
+        </section>
+
+        <section class="panel finance-panel" aria-labelledby="finance-transactions-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">MOVIMENTAÇÕES</p>
+              <h2 id="finance-transactions-heading">Cobranças e despesas</h2>
+            </div>
+            <span class="result-count" id="finance-entry-count"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Tipo</th>
+                  <th scope="col">Descrição</th>
+                  <th scope="col">Categoria</th>
+                  <th scope="col">Valor</th>
+                  <th scope="col">Vencimento</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="finance-entry-list">
+                <tr><td class="empty-state" colspan="7">Carregando movimentações...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <p class="privacy-note">Cobranças de aluguel são geradas ao cadastrar uma locação. Despesas só são rateadas quando o administrador solicita o rateio e o contrato do inquilino prevê despesas separadas. Juros e multas contratuais são registrados, mas não aplicados automaticamente.</p>
+      </section>
+
+      <dialog class="form-dialog" id="expense-dialog" aria-labelledby="expense-dialog-title">
+        <form id="expense-form">
+          <div class="dialog-heading">
+            <div>
+              <p class="eyebrow">SAÍDA FINANCEIRA</p>
+              <h2 id="expense-dialog-title">Nova despesa</h2>
+            </div>
+            <button class="dialog-close" type="button" data-close-dialog="expense-dialog" aria-label="Fechar">×</button>
+          </div>
+          <label class="form-field">
+            <span>Descrição *</span>
+            <input name="titulo" type="text" maxlength="180" required>
+          </label>
+          <div class="form-grid">
+            <label class="form-field">
+              <span>Categoria *</span>
+              <select name="categoria" required>
+                <option value="Agua">Água</option>
+                <option value="Energia">Energia</option>
+                <option value="Gas">Gás</option>
+                <option value="Internet">Internet</option>
+                <option value="Manutencao">Manutenção</option>
+                <option value="Limpeza">Limpeza</option>
+                <option value="Impostos">Impostos</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Tipo *</span>
+              <select name="tipo" required>
+                <option value="Fixa">Fixa</option>
+                <option value="Variavel">Variável</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>Valor (R$) *</span>
+              <input name="valor" type="number" min="0.01" step="0.01" required>
+            </label>
+            <label class="form-field">
+              <span>Vencimento *</span>
+              <input name="data_vencimento" id="expense-due-date" type="date" required>
+            </label>
+            <label class="form-field">
+              <span>Status *</span>
+              <select name="status" required>
+                <option value="Pendente">Pendente</option>
+                <option value="Pago">Pago</option>
+              </select>
+            </label>
+            <label class="form-field" id="expense-payment-date-field" hidden>
+              <span>Data do pagamento</span>
+              <input name="data_pagamento" type="date">
+            </label>
+          </div>
+          <label class="availability-control">
+            <input name="ratear" type="checkbox">
+            <span><strong>Ratear entre locações ativas que preveem despesas separadas</strong><small>O rateio será dividido igualmente e lançado como cobrança de cada locação. Despesas inclusas ou “outra forma” não recebem rateio automático.</small></span>
+          </label>
+          <div class="dialog-actions">
+            <button class="button button-secondary" type="button" data-close-dialog="expense-dialog">Cancelar</button>
+            <button class="button button-primary" type="submit">Salvar despesa</button>
+          </div>
+        </form>
+      </dialog>
+
+      <footer class="page-footer">Pensionato Pro · Financeiro</footer>
+    </main>
+  </div>
+</body>
+</html>

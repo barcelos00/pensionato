@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9ede9">
+  <title>Pensionato Pro | Inquilinos e locações</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="js/supabaseClient.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body data-page="inquilinos">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="admin.html" aria-label="Pensionato Pro, administração">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span>Pensionato<span class="brand-light">Pro</span></span>
+      </a>
+      <nav class="navigation" aria-label="Navegação administrativa">
+        <a class="nav-link" href="admin.html"><span aria-hidden="true">⌂</span> Painel admin</a>
+        <a class="nav-link" href="quartos.html"><span aria-hidden="true">▦</span> Casas e quartos</a>
+        <a class="nav-link is-active" href="inquilinos.html" aria-current="page"><span aria-hidden="true">♙</span> Inquilinos</a>
+        <a class="nav-link" href="financeiro.html"><span aria-hidden="true">$</span> Financeiro</a>
+        <a class="nav-link" href="index.html"><span aria-hidden="true">↗</span> Catálogo público</a>
+      </nav>
+      <p class="sidebar-note">Dados cadastrais visíveis apenas para administradores.</p>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">MORADORES E LOCAÇÕES</p>
+          <h1>Inquilinos</h1>
+          <p class="page-description">Registre os dados cadastrais e os valores combinados pelo WhatsApp.</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button button-secondary" id="admin-signout" type="button" hidden>Sair</button>
+          <button class="button button-primary" id="add-tenant-button" type="button" hidden>+ Nova locação</button>
+        </div>
+      </header>
+
+      <section class="notice" id="app-status" role="status" aria-live="polite" hidden></section>
+
+      <section class="panel" id="tenant-panel" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">OCUPAÇÃO ATUAL</p>
+            <h2>Inquilinos e locações em curso ou programadas</h2>
+          </div>
+          <span class="result-count" id="tenant-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Inquilino</th>
+                <th scope="col">Casa / quarto</th>
+                <th scope="col">Modalidade</th>
+                <th scope="col">Valor combinado</th>
+                <th scope="col">Período</th>
+                <th scope="col">Despesas</th>
+                <th scope="col">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tenant-list">
+              <tr><td class="empty-state" colspan="7">Carregando inquilinos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="privacy-note">Os documentos formais e assinaturas continuam sendo tratados diretamente pelo WhatsApp. Esta tela registra somente os dados e valores necessários à administração. CPF e dados pessoais ficam restritos às contas administrativas autorizadas.</p>
+
+      <dialog class="form-dialog large-dialog" id="tenant-dialog" aria-labelledby="tenant-dialog-title">
+        <form id="tenant-form">
+          <div class="dialog-heading">
+            <div>
+              <p class="eyebrow">CADASTRO INTERNO</p>
+              <h2 id="tenant-dialog-title">Nova locação</h2>
+            </div>
+            <button class="dialog-close" type="button" data-close-dialog="tenant-dialog" aria-label="Fechar">×</button>
+          </div>
+
+          <fieldset class="form-section">
+            <legend>Dados do inquilino</legend>
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>Nome completo *</span>
+                <input name="nome" type="text" maxlength="160" autocomplete="name" required>
+              </label>
+              <label class="form-field">
+                <span>Telefone / WhatsApp *</span>
+                <input name="telefone" type="tel" maxlength="30" autocomplete="tel" required>
+              </label>
+              <label class="form-field">
+                <span>E-mail</span>
+                <input name="email" type="email" maxlength="254" autocomplete="email">
+              </label>
+              <label class="form-field">
+                <span>Nascimento</span>
+                <input name="nascimento" type="date">
+              </label>
+              <label class="form-field">
+                <span>CPF</span>
+                <input name="cpf" type="text" maxlength="14" inputmode="numeric">
+              </label>
+              <label class="form-field">
+                <span>RG</span>
+                <input name="rg" type="text" maxlength="30">
+              </label>
+              <label class="form-field">
+                <span>Data de expedição do RG</span>
+                <input name="rg_data_expedicao" type="date">
+              </label>
+              <label class="form-field">
+                <span>Estado civil</span>
+                <input name="estado_civil" type="text" maxlength="40">
+              </label>
+              <label class="form-field">
+                <span>Profissão</span>
+                <input name="profissao" type="text" maxlength="100">
+              </label>
+              <label class="form-field form-field-wide">
+                <span>Empresa / local de trabalho</span>
+                <input name="empresa_trabalho" type="text" maxlength="180">
+              </label>
+              <label class="form-field form-field-wide">
+                <span>Endereço do inquilino</span>
+                <input name="endereco" type="text" maxlength="255" autocomplete="street-address">
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Locação e cobrança</legend>
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>Quarto *</span>
+                <select name="quarto_id" id="tenant-room-select" required>
+                  <option value="">Carregando quartos...</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span>Modalidade *</span>
+                <select name="modalidade" id="tenant-mode" required>
+                  <option value="mensal">Mensal</option>
+                  <option value="diaria">Diária (por noite)</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span id="tenant-rate-label">Aluguel mensal (R$) *</span>
+                <input name="valor" type="number" min="0.01" step="0.01" required>
+              </label>
+              <label class="form-field">
+                <span>Início *</span>
+                <input name="data_inicio" type="date" required>
+              </label>
+              <label class="form-field">
+                <span>Fim previsto *</span>
+                <input name="data_fim" type="date" required>
+              </label>
+              <label class="form-field monthly-field">
+                <span>Dia do vencimento *</span>
+                <input name="dia_vencimento" type="number" min="1" max="31" value="10">
+              </label>
+              <label class="form-field">
+                <span>Taxa de contrato (R$)</span>
+                <input name="taxa_contrato" type="number" min="0" step="0.01" value="0">
+              </label>
+              <label class="form-field">
+                <span>Multa por atraso (%)</span>
+                <input name="multa_percentual" type="number" min="0" step="0.01" value="0">
+              </label>
+              <label class="form-field">
+                <span>Juros mensais por atraso (%)</span>
+                <input name="juros_percentual" type="number" min="0" step="0.01" value="0">
+              </label>
+              <label class="form-field">
+                <span>Aviso de rescisão (dias)</span>
+                <input name="aviso_rescisao_dias" type="number" min="0" max="365" value="30">
+              </label>
+              <label class="form-field">
+                <span>Forma combinada de pagamento</span>
+                <select name="forma_pagamento">
+                  <option value="pix">PIX / transferência</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="outro">Outra forma</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span>Despesas no combinado *</span>
+                <select name="despesas_regra" required>
+                  <option value="incluidas">Inclusas no aluguel</option>
+                  <option value="rateio">Cobradas separadamente por rateio igual</option>
+                  <option value="outra">Outra forma combinada</option>
+                </select>
+              </label>
+              <label class="form-field form-field-wide" id="expense-rule-details" hidden>
+                <span>Detalhe da outra forma</span>
+                <input name="despesas_descricao" type="text" maxlength="240" placeholder="Descreva o que foi combinado">
+              </label>
+            </div>
+            <p class="form-hint">O sistema criará as cobranças futuras: mensal proporcional aos dias no primeiro/último mês ou diárias por noite, vencendo no check-in. Datas finais são inclusivas para mensal e exclusivas para diária (checkout).</p>
+          </fieldset>
+
+          <details class="form-section optional-guarantor">
+            <summary>Dados do fiador (opcional)</summary>
+            <div class="form-grid">
+              <label class="form-field form-field-wide">
+                <span>Nome completo</span>
+                <input name="fiador_nome" type="text" maxlength="160">
+              </label>
+              <label class="form-field">
+                <span>Nascimento</span>
+                <input name="fiador_nascimento" type="date">
+              </label>
+              <label class="form-field">
+                <span>CPF</span>
+                <input name="fiador_cpf" type="text" maxlength="14" inputmode="numeric">
+              </label>
+              <label class="form-field">
+                <span>RG</span>
+                <input name="fiador_rg" type="text" maxlength="30">
+              </label>
+              <label class="form-field">
+                <span>Telefone</span>
+                <input name="fiador_telefone" type="tel" maxlength="30">
+              </label>
+              <label class="form-field">
+                <span>Estado civil</span>
+                <input name="fiador_estado_civil" type="text" maxlength="40">
+              </label>
+              <label class="form-field">
+                <span>Profissão</span>
+                <input name="fiador_profissao" type="text" maxlength="100">
+              </label>
+              <label class="form-field">
+                <span>Nome do cônjuge</span>
+                <input name="fiador_conjuge_nome" type="text" maxlength="160">
+              </label>
+              <label class="form-field">
+                <span>CPF do cônjuge</span>
+                <input name="fiador_conjuge_cpf" type="text" maxlength="14" inputmode="numeric">
+              </label>
+              <label class="form-field form-field-wide">
+                <span>Endereço</span>
+                <input name="fiador_endereco" type="text" maxlength="255">
+              </label>
+            </div>
+          </details>
+
+          <div class="dialog-actions">
+            <button class="button button-secondary" type="button" data-close-dialog="tenant-dialog">Cancelar</button>
+            <button class="button button-primary" type="submit">Criar locação e cobranças</button>
+          </div>
+        </form>
+      </dialog>
+
+      <footer class="page-footer">Pensionato Pro · Inquilinos</footer>
+    </main>
+  </div>
+</body>
+</html>

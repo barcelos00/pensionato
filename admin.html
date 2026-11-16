@@ -19,7 +19,7 @@
       </a>
       <nav class="navigation" aria-label="Navegação administrativa">
         <a class="nav-link is-active" href="admin.html" aria-current="page"><span aria-hidden="true">⌂</span> Painel admin</a>
-        <a class="nav-link" href="quartos.html"><span aria-hidden="true">▦</span> Casas e quartos</a>
+        <a class="nav-link" href="quartos.html"><span aria-hidden="true">▦</span> Casas e acomodações</a>
         <a class="nav-link" href="inquilinos.html"><span aria-hidden="true">♙</span> Inquilinos</a>
         <a class="nav-link" href="financeiro.html"><span aria-hidden="true">$</span> Financeiro</a>
         <a class="nav-link" href="index.html"><span aria-hidden="true">↗</span> Ver catálogo público</a>
@@ -62,7 +62,7 @@
           <ol class="setup-steps">
             <li>
               <strong>Execute a migração do projeto.</strong>
-              No Supabase, abra <b>SQL Editor → New query</b>, cole o conteúdo de <code>sql/marketplace-admin.sql</code> e clique em <b>Run</b>. Ela cria os campos de disponibilidade, as configurações do WhatsApp e as regras de acesso.
+              No Supabase, abra <b>SQL Editor → New query</b>, cole o conteúdo atualizado de <code>sql/marketplace-admin.sql</code> e clique em <b>Run</b>. A migração configura as fotos da casa e dos quartos, níveis de conforto, modalidades de cobrança, disponibilidade, WhatsApp e regras de acesso.
             </li>
             <li>
               <strong>Crie o usuário.</strong>
@@ -94,7 +94,7 @@ where email = 'SEU_EMAIL_AQUI';</code></pre>
             <span class="stat-caption">cadastradas no painel</span>
           </article>
           <article class="stat-card">
-            <span class="stat-label">Quartos cadastrados</span>
+            <span class="stat-label">Acomodações cadastradas</span>
             <strong class="stat-value" id="admin-stat-quartos">—</strong>
             <span class="stat-caption">em todas as casas</span>
           </article>
@@ -125,8 +125,8 @@ where email = 'SEU_EMAIL_AQUI';</code></pre>
         <section class="admin-action-card">
           <div>
             <p class="eyebrow">ANÚNCIOS</p>
-            <h2>Casas e quartos</h2>
-            <p class="page-description">Adicione imóveis, ajuste os quartos e escolha o que fica visível para os interessados.</p>
+            <h2>Casas e acomodações</h2>
+            <p class="page-description">Adicione várias fotos por imóvel e por quarto, informe o conforto e escolha quais vagas anunciar.</p>
           </div>
           <a class="button button-primary" href="quartos.html">Gerenciar imóveis</a>
         </section>
@@ -134,7 +134,7 @@ where email = 'SEU_EMAIL_AQUI';</code></pre>
         <section class="admin-module-grid" aria-label="Módulos administrativos">
           <a class="admin-module-card" href="inquilinos.html">
             <span class="admin-module-icon" aria-hidden="true">♙</span>
-            <span><strong>Inquilinos e locações</strong><small>Cadastre moradores, modalidade e valores mensais ou por diária.</small></span>
+            <span><strong>Inquilinos e locações</strong><small>Guarde apenas o contato e os dados essenciais para controlar cada ocupação.</small></span>
             <span class="admin-module-arrow" aria-hidden="true">→</span>
           </a>
           <a class="admin-module-card" href="financeiro.html">

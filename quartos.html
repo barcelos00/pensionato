@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f7f4">
-  <title>Pensionato Pro | Casas e quartos</title>
+  <title>Pensionato Pro | Casas e acomodações</title>
   <link rel="stylesheet" href="css/style.css">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="js/supabaseClient.js"></script>
@@ -22,7 +22,7 @@
           <span aria-hidden="true">⌂</span> Painel admin
         </a>
         <a class="nav-link is-active" href="quartos.html" aria-current="page">
-          <span aria-hidden="true">▦</span> Casas e quartos
+          <span aria-hidden="true">▦</span> Casas e acomodações
         </a>
         <a class="nav-link" href="inquilinos.html">
           <span aria-hidden="true">♙</span> Inquilinos
@@ -41,8 +41,8 @@
       <header class="page-header">
         <div>
           <p class="eyebrow">ACOMODAÇÕES</p>
-          <h1>Casas e quartos</h1>
-          <p class="page-description">Cadastre imóveis e escolha quais casas e quartos ficam disponíveis no catálogo.</p>
+          <h1>Casas e acomodações</h1>
+          <p class="page-description">Mostre a casa e os quartos com várias fotos, conforto e cobrança mensal ou diária.</p>
         </div>
         <div class="toolbar-actions">
           <a class="button button-secondary" href="admin.html">Painel admin</a>
@@ -71,11 +71,11 @@
         <div class="section-toolbar room-toolbar">
           <div>
             <p class="eyebrow">ACOMODAÇÕES</p>
-            <h2 id="quartos-heading">Quartos desta casa</h2>
+            <h2 id="quartos-heading">Acomodações desta casa</h2>
           </div>
           <div class="toolbar-actions">
-            <span class="result-count" id="quartos-count">0 quartos</span>
-            <button class="button button-primary" id="add-room-button" type="button">+ Novo quarto</button>
+            <span class="result-count" id="quartos-count">0 acomodações</span>
+            <button class="button button-primary" id="add-room-button" type="button">+ Nova acomodação</button>
           </div>
         </div>
         <div class="room-grid" id="quartos-list">
@@ -108,11 +108,11 @@
             </label>
           </div>
           <label class="form-field">
-            <span>Foto da casa</span>
-            <input name="foto_file" type="file" accept="image/*">
+            <span>Fotos da casa</span>
+            <input name="foto_file" type="file" accept="image/*" multiple>
           </label>
           <div class="image-preview" id="house-image-preview" hidden></div>
-          <p class="form-hint" id="house-photo-hint">Escolha uma imagem do celular ou computador. Formatos aceitos: JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF e BMP; tamanho máximo: 10 MB. No cadastro, a foto é opcional.</p>
+          <p class="form-hint" id="house-photo-hint">Adicione várias fotos para mostrar a casa. Cada imagem pode ter até 10 MB; as fotos já cadastradas serão mantidas.</p>
           <label class="availability-control">
             <input name="disponivel" type="checkbox">
             <span><strong>Exibir esta casa no catálogo público</strong><small>A casa aparece quando houver pelo menos um quarto marcado como disponível.</small></span>
@@ -128,13 +128,20 @@
         <form id="room-form">
           <div class="dialog-heading">
             <div>
-              <p class="eyebrow">DADOS DO QUARTO</p>
-              <h2 id="room-dialog-title">Novo quarto</h2>
+              <p class="eyebrow">DADOS DA ACOMODAÇÃO</p>
+              <h2 id="room-dialog-title">Nova acomodação</h2>
             </div>
             <button class="dialog-close" type="button" data-close-dialog="room-dialog" aria-label="Fechar">×</button>
           </div>
           <input id="room-id" name="id" type="hidden">
           <div class="form-grid">
+            <label class="form-field">
+              <span>Tipo de acomodação *</span>
+              <select name="tipo_acomodacao" required>
+                <option value="quarto">Quarto</option>
+                <option value="apartamento">Apartamento</option>
+              </select>
+            </label>
             <label class="form-field">
               <span>Número ou identificação *</span>
               <input name="numero" type="text" maxlength="40" required>
@@ -144,25 +151,35 @@
               <input name="andar" type="text" maxlength="60" value="Térreo">
             </label>
             <label class="form-field">
-              <span>Tipo de mobília</span>
-              <input name="tipo_mobilia" type="text" maxlength="100" value="Simples">
+              <span>Nível de conforto *</span>
+              <select name="nivel_conforto" required>
+                <option value="Essencial">Essencial</option>
+                <option value="Confortável">Confortável</option>
+                <option value="Completo">Completo</option>
+              </select>
             </label>
             <label class="form-field">
-              <span>Valor base (R$) *</span>
-              <input name="valor_base" type="number" min="0" step="0.01" value="0.00" required>
+              <span>Tipo de cobrança *</span>
+              <select name="modalidade_cobranca" required>
+                <option value="mensal">Mensal</option>
+                <option value="diaria">Diária</option>
+              </select>
             </label>
           </div>
           <label class="form-field">
-            <span>Foto do quarto (URL)</span>
-            <input name="foto_url" type="url" maxlength="2048" placeholder="https://exemplo.com/quarto.jpg">
+            <span>Fotos do quarto</span>
+            <input name="fotos_files" type="file" accept="image/*" multiple>
           </label>
+          <div class="image-preview" id="room-image-preview" hidden></div>
+          <p class="form-hint" id="room-photo-hint">Adicione várias fotos do quarto. Cada imagem pode ter até 10 MB; as fotos já cadastradas serão mantidas.</p>
           <label class="form-field">
-            <span>Características</span>
+            <span>Outras características</span>
             <textarea name="features" rows="3" placeholder="Ex.: banheiro privativo, ventilador, janela"></textarea>
           </label>
+          <p class="form-hint">Todos oferecem cama, geladeira, TV, água, luz e internet inclusas. Configure os valores em Financeiro; clientes verão “Valores a consultar”.</p>
           <label class="availability-control">
             <input name="disponivel" type="checkbox">
-            <span><strong>Quarto disponível</strong><small>Quartos indisponíveis não aparecem como opção no catálogo.</small></span>
+            <span><strong>Acomodação disponível</strong><small>Acomodações indisponíveis não aparecem no catálogo.</small></span>
           </label>
           <div class="dialog-actions">
             <button class="button button-secondary" type="button" data-close-dialog="room-dialog">Cancelar</button>

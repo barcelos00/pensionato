@@ -2,10 +2,15 @@
 -- Existing houses and rooms become unavailable until an administrator reviews them.
 
 alter table public.casas
-  add column if not exists disponivel boolean not null default false;
+  add column if not exists disponivel boolean not null default false,
+  add column if not exists fotos_urls text[] not null default '{}';
 
 alter table public.quartos
-  add column if not exists disponivel boolean not null default false;
+  add column if not exists disponivel boolean not null default false,
+  add column if not exists fotos_urls text[] not null default '{}',
+  add column if not exists nivel_conforto text not null default 'Essencial',
+  add column if not exists tipo_acomodacao text not null default 'quarto',
+  add column if not exists modalidade_cobranca text not null default 'diaria';
 
 create table if not exists public.configuracoes_publicas (
   id integer primary key check (id = 1),
@@ -36,7 +41,7 @@ alter table public.configuracoes_publicas enable row level security;
 drop policy if exists "Public can read available houses" on public.casas;
 create policy "Public can read available houses"
   on public.casas for select
-  to anon, authenticated
+  to anon
   using (disponivel = true);
 
 drop policy if exists "Administrators manage houses" on public.casas;
@@ -49,7 +54,7 @@ create policy "Administrators manage houses"
 drop policy if exists "Public can read available rooms" on public.quartos;
 create policy "Public can read available rooms"
   on public.quartos for select
-  to anon, authenticated
+  to anon
   using (
     disponivel = true
     and exists (
@@ -70,7 +75,7 @@ create policy "Administrators manage rooms"
 drop policy if exists "Public can read contact settings" on public.configuracoes_publicas;
 create policy "Public can read contact settings"
   on public.configuracoes_publicas for select
-  to anon, authenticated
+  to anon
   using (id = 1);
 
 drop policy if exists "Administrators manage contact settings" on public.configuracoes_publicas;
@@ -85,13 +90,14 @@ grant insert, update, delete on public.casas, public.quartos, public.configuraco
 
 -- Public visitors see only the neighborhood and listing fields, never the full address.
 revoke all on public.casas, public.quartos, public.configuracoes_publicas from anon;
-grant select (id, nome, bairro, foto_url, disponivel)
+grant select (id, nome, bairro, foto_url, fotos_urls, disponivel)
   on public.casas to anon;
-grant select (id, casa_id, numero, andar, tipo_mobilia, valor_base, foto_url, features, disponivel)
+grant select (id, casa_id, numero, andar, tipo_mobilia, foto_url, fotos_urls, features, disponivel, nivel_conforto, tipo_acomodacao, modalidade_cobranca)
   on public.quartos to anon;
+revoke select (valor_base) on public.quartos from anon;
 grant select on public.configuracoes_publicas to anon;
 
--- A public bucket lets visitors see published house photos; only admins can upload or delete.
+-- A public bucket lets visitors see published accommodation photos; only admins can upload or delete.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'pensionato-uploads',

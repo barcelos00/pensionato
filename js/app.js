@@ -17,7 +17,7 @@ const HOUSE_PHOTO_TYPES = new Map([
 let houses = [];
 let selectedHouse = null;
 let rooms = [];
-let housePreviewObjectUrl = null;
+let accommodationPreviewObjectUrls = [];
 let catalogHouses = [];
 let catalogWhatsAppNumber = "";
 let catalogSearchTerm = "";
@@ -120,6 +120,29 @@ function createImage(url, alt, className) {
   return image;
 }
 
+function getPhotoUrls(item) {
+  return [...new Set([item?.foto_url, ...(Array.isArray(item?.fotos_urls) ? item.fotos_urls : [])]
+    .map(safeImageUrl)
+    .filter(Boolean))];
+}
+
+function getAccommodationLabel(accommodation) {
+  return accommodation?.tipo_acomodacao === "apartamento" ? "Apartamento" : "Quarto";
+}
+
+function createPhotoGallery(urls, alt, className) {
+  const gallery = makeElement("div", `photo-gallery ${className || ""}`.trim());
+  const validUrls = urls.map(safeImageUrl).filter(Boolean);
+  if (!validUrls.length) {
+    gallery.append(makeElement("div", "image-placeholder", "Foto não informada"));
+    return gallery;
+  }
+  validUrls.forEach((url, index) => {
+    gallery.append(createImage(url, `${alt} ${index + 1}`, "gallery-image"));
+  });
+  return gallery;
+}
+
 function showLoadError(error) {
   const details = error && error.message ? ` Detalhes: ${error.message}` : "";
   showStatus(`Não foi possível carregar os dados do Supabase.${details}`, "error");
@@ -163,11 +186,14 @@ function showAdminPageConfiguration(contentId, actionId) {
   showStatus(window.pensionatoSupabaseError || "O cliente do Supabase não está configurado.");
 }
 
-function getWhatsAppUrl(house) {
+function getWhatsAppUrl(house, accommodation = null) {
   const phone = catalogWhatsAppNumber.replace(/\D/g, "");
   if (!/^\d{10,15}$/.test(phone)) return "";
 
-  const message = `Olá! Tenho interesse na casa ${house.nome}, no bairro ${house.bairro}. Ela ainda está disponível?`;
+  const place = accommodation
+    ? `no ${getAccommodationLabel(accommodation)} ${accommodation.numero} da casa ${house.nome}`
+    : `na casa ${house.nome}`;
+  const message = `Olá! Tenho interesse ${place}, no bairro ${house.bairro}. Qual o valor e a disponibilidade?`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
@@ -184,7 +210,7 @@ async function loadCatalog() {
       .maybeSingle(),
     publicSupabaseClient
       .from("casas")
-      .select("id, nome, bairro, foto_url")
+      .select("id, nome, bairro, foto_url, fotos_urls")
       .eq("disponivel", true)
       .order("nome", { ascending: true })
   ]);
@@ -256,13 +282,13 @@ function renderCatalogHouses() {
 
   filtered.forEach((house) => {
     const card = makeElement("article", "house-card public-house-card");
-    card.append(createImage(house.foto_url, `Foto da casa ${house.nome}`, "house-card-image"));
+    card.append(createPhotoGallery(getPhotoUrls(house).slice(0, 3), `Foto da casa ${house.nome}`, "house-card-gallery"));
     const content = makeElement("div", "house-card-content");
     const roomCount = house.quartos_count ?? 0;
     content.append(
       makeElement("p", "house-name", house.nome),
       makeElement("p", "house-address", `Bairro: ${house.bairro}`),
-      makeElement("span", "house-neighborhood", `${house.bairro} · ${roomCount} ${roomCount === 1 ? "quarto disponível" : "quartos disponíveis"}`)
+      makeElement("span", "house-neighborhood", `${house.bairro} · ${roomCount} ${roomCount === 1 ? "acomodação disponível" : "acomodações disponíveis"}`)
     );
     const openButton = makeElement("button", "button button-primary", "Conhecer casa");
     openButton.type = "button";
@@ -276,7 +302,7 @@ function renderCatalogHouses() {
 function renderCatalogHouse(house) {
   const container = document.getElementById("catalog-house");
   container.replaceChildren();
-  container.append(createImage(house.foto_url, `Foto da casa ${house.nome}`, "house-detail-image"));
+  container.append(createPhotoGallery(getPhotoUrls(house), `Foto da casa ${house.nome}`, "house-detail-gallery"));
 
   const content = makeElement("div", "house-detail-content");
   const title = makeElement("h2", "", house.nome);
@@ -306,33 +332,42 @@ function renderCatalogHouse(house) {
   }
 }
 
-function renderCatalogRooms(roomList) {
+function renderCatalogRooms(roomList, house) {
   const list = document.getElementById("catalog-rooms");
   const count = document.getElementById("catalog-room-count");
   list.replaceChildren();
-  count.textContent = `${roomList.length} ${roomList.length === 1 ? "quarto disponível" : "quartos disponíveis"}`;
+  count.textContent = `${roomList.length} ${roomList.length === 1 ? "acomodação disponível" : "acomodações disponíveis"}`;
 
   if (!roomList.length) {
-    list.append(makeElement("p", "empty-state", "No momento, esta casa não tem quartos disponíveis."));
+    list.append(makeElement("p", "empty-state", "No momento, esta casa não tem acomodações disponíveis."));
     return;
   }
 
   roomList.forEach((room) => {
     const card = makeElement("article", "room-card");
-    if (room.foto_url) card.append(createImage(room.foto_url, `Foto do quarto ${room.numero}`, "room-card-image"));
+    card.append(createPhotoGallery(getPhotoUrls(room), `Foto: ${getAccommodationLabel(room)} ${room.numero}`, "room-gallery"));
     const content = makeElement("div", "room-card-content");
     const titleRow = makeElement("div", "room-card-title-row");
     titleRow.append(
-      makeElement("h3", "", `Quarto ${room.numero}`),
-      makeElement("span", "room-price", formatCurrency(room.valor_base))
+      makeElement("h3", "", `${getAccommodationLabel(room)} ${room.numero}`),
+      makeElement("span", "room-price", "Valores a consultar")
     );
     const meta = makeElement("div", "room-meta");
     meta.append(
       makeElement("span", "room-tag", room.andar || "Andar não informado"),
-      makeElement("span", "room-tag", room.tipo_mobilia || "Mobília não informada")
+      makeElement("span", "room-tag", room.nivel_conforto || "Conforto essencial"),
+      makeElement("span", "room-tag", room.modalidade_cobranca === "diaria" ? "Diária" : "Mensal")
     );
     content.append(titleRow, meta);
     if (room.features) content.append(makeElement("p", "room-features", room.features));
+    const whatsappUrl = getWhatsAppUrl(house, room);
+    if (whatsappUrl) {
+      const contactLink = makeElement("a", "button button-whatsapp", "Consultar no WhatsApp");
+      contactLink.href = whatsappUrl;
+      contactLink.target = "_blank";
+      contactLink.rel = "noopener noreferrer";
+      content.append(contactLink);
+    }
     card.append(content);
     list.append(card);
   });
@@ -356,23 +391,23 @@ async function openCatalogHouse(houseId, updateUrl = true) {
 
   renderCatalogHouse(house);
   document.getElementById("catalog-rooms").replaceChildren(
-    makeElement("p", "empty-state", "Carregando quartos disponíveis...")
+    makeElement("p", "empty-state", "Carregando acomodações disponíveis...")
   );
 
   const { data, error } = await publicSupabaseClient
     .from("quartos")
-    .select("id, casa_id, numero, andar, tipo_mobilia, valor_base, foto_url, features")
+    .select("id, casa_id, numero, andar, foto_url, fotos_urls, features, nivel_conforto, tipo_acomodacao, modalidade_cobranca")
     .eq("casa_id", house.id)
     .eq("disponivel", true)
     .order("numero", { ascending: true });
 
   if (error) {
     showLoadError(error);
-    renderCatalogRooms([]);
+    renderCatalogRooms([], house);
     return;
   }
 
-  renderCatalogRooms(data ?? []);
+  renderCatalogRooms(data ?? [], house);
 }
 
 function bindCatalogEvents() {
@@ -470,7 +505,7 @@ function renderDashboardCasas(casas) {
 async function loadHouses() {
   const { data, error } = await supabaseClient
     .from("casas")
-    .select("id, nome, bairro, endereco, foto_url, criado_em, disponivel")
+    .select("id, nome, bairro, endereco, foto_url, fotos_urls, criado_em, disponivel")
     .order("nome", { ascending: true });
 
   if (error) throw error;
@@ -489,7 +524,7 @@ function renderHouses() {
 
   houses.forEach((house) => {
     const card = makeElement("article", "house-card");
-    card.append(createImage(house.foto_url, `Foto da casa ${house.nome}`, "house-card-image"));
+    card.append(createPhotoGallery(getPhotoUrls(house).slice(0, 3), `Foto da casa ${house.nome}`, "house-card-gallery"));
     const content = makeElement("div", "house-card-content");
     content.append(makeElement("p", "house-name", house.nome));
     content.append(makeElement("p", "house-address", house.endereco || house.bairro));
@@ -527,27 +562,7 @@ function makeUniqueFileId() {
   return [...randomValues].map((value) => value.toString(16).padStart(8, "0")).join("");
 }
 
-function getManagedHousePhotoPath(photoUrl) {
-  if (!photoUrl || !supabaseClient) return null;
-
-  const publicUrlPrefix = supabaseClient.storage
-    .from(HOUSE_PHOTO_BUCKET)
-    .getPublicUrl("")
-    .data.publicUrl;
-
-  try {
-    const prefix = new URL(publicUrlPrefix);
-    const candidate = new URL(photoUrl);
-    if (candidate.origin !== prefix.origin || !candidate.pathname.startsWith(prefix.pathname)) return null;
-
-    const path = decodeURIComponent(candidate.pathname.slice(prefix.pathname.length));
-    return /^casas\/[0-9a-f-]+\.(jpg|png|webp|gif|avif|heic|heif|bmp)$/i.test(path) ? path : null;
-  } catch {
-    return null;
-  }
-}
-
-async function uploadHousePhoto(file) {
+async function uploadAccommodationPhoto(file, folder) {
   const extension = HOUSE_PHOTO_TYPES.get(file.type);
   if (!extension) {
     throw new Error("Escolha uma imagem JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF ou BMP.");
@@ -556,7 +571,7 @@ async function uploadHousePhoto(file) {
     throw new Error("A imagem precisa ter no máximo 10 MB.");
   }
 
-  const path = `casas/${makeUniqueFileId()}.${extension}`;
+  const path = `${folder}/${makeUniqueFileId()}.${extension}`;
   const { error } = await supabaseClient.storage
     .from(HOUSE_PHOTO_BUCKET)
     .upload(path, file, {
@@ -576,35 +591,31 @@ async function uploadHousePhoto(file) {
   return { path, publicUrl: data.publicUrl };
 }
 
-function releaseHousePhotoPreview() {
-  if (!housePreviewObjectUrl) return;
-  URL.revokeObjectURL(housePreviewObjectUrl);
-  housePreviewObjectUrl = null;
+function releaseAccommodationPhotoPreviews() {
+  accommodationPreviewObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  accommodationPreviewObjectUrls = [];
 }
 
-function updateHousePhotoPreview(file, existingPhotoUrl = "") {
-  const preview = document.getElementById("house-image-preview");
-  const hint = document.getElementById("house-photo-hint");
+function updatePhotoPreview(previewId, files, existingUrls) {
+  const preview = document.getElementById(previewId);
   preview.replaceChildren();
-  releaseHousePhotoPreview();
-
-  const imageUrl = file ? URL.createObjectURL(file) : safeImageUrl(existingPhotoUrl);
-  preview.hidden = !imageUrl;
-  if (imageUrl) {
+  releaseAccommodationPhotoPreviews();
+  const selectedUrls = files.map((file) => {
+    const url = URL.createObjectURL(file);
+    accommodationPreviewObjectUrls.push(url);
+    return url;
+  });
+  const urls = [...existingUrls.map(safeImageUrl).filter(Boolean), ...selectedUrls];
+  preview.hidden = urls.length === 0;
+  urls.forEach((url, index) => {
     const image = makeElement("img");
-    image.alt = "Prévia da foto da casa";
-    image.src = imageUrl;
+    image.alt = `Prévia da foto ${index + 1}`;
+    image.src = url;
     image.addEventListener("error", () => {
       image.replaceWith(makeElement("div", "image-placeholder", "Foto indisponível"));
     }, { once: true });
     preview.append(image);
-    if (file) preview.append(makeElement("p", "image-preview-caption", file.name));
-  }
-  if (hint) {
-    hint.textContent = existingPhotoUrl && !file
-      ? "A foto atual será mantida se você não escolher outra imagem."
-      : "Escolha uma imagem do celular ou computador. Formatos aceitos: JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF e BMP; tamanho máximo: 10 MB. No cadastro, a foto é opcional.";
-  }
+  });
 }
 
 async function openHouse(houseId, updateUrl = true) {
@@ -632,7 +643,7 @@ async function openHouse(houseId, updateUrl = true) {
 function renderSelectedHouse() {
   const container = document.getElementById("selected-house");
   container.replaceChildren();
-  container.append(createImage(selectedHouse.foto_url, `Foto da casa ${selectedHouse.nome}`, "house-detail-image"));
+  container.append(createPhotoGallery(getPhotoUrls(selectedHouse), `Foto da casa ${selectedHouse.nome}`, "house-detail-gallery"));
 
   const content = makeElement("div", "house-detail-content");
   const titleRow = makeElement("div", "house-detail-title-row");
@@ -671,7 +682,7 @@ async function loadRooms(houseId) {
 
   const { data, error } = await supabaseClient
     .from("quartos")
-    .select("id, casa_id, numero, andar, tipo_mobilia, valor_base, foto_url, features, disponivel, leitos(id)")
+    .select("id, casa_id, numero, andar, tipo_mobilia, valor_base, foto_url, fotos_urls, features, disponivel, nivel_conforto, tipo_acomodacao, modalidade_cobranca, leitos(id)")
     .eq("casa_id", houseId)
     .order("numero", { ascending: true });
 
@@ -684,32 +695,30 @@ function renderRooms(roomList) {
   const list = document.getElementById("quartos-list");
   const count = document.getElementById("quartos-count");
   list.replaceChildren();
-  count.textContent = `${roomList.length} ${roomList.length === 1 ? "quarto" : "quartos"}`;
+  count.textContent = `${roomList.length} ${roomList.length === 1 ? "acomodação" : "acomodações"}`;
 
   if (!roomList.length) {
-    list.append(makeElement("p", "empty-state", "Esta casa ainda não tem quartos cadastrados."));
+    list.append(makeElement("p", "empty-state", "Esta casa ainda não tem acomodações cadastradas."));
     return;
   }
 
   roomList.forEach((room) => {
     const card = makeElement("article", "room-card");
-    if (room.foto_url) card.append(createImage(room.foto_url, `Foto do quarto ${room.numero}`, "room-card-image"));
+    card.append(createPhotoGallery(getPhotoUrls(room), `Foto: ${getAccommodationLabel(room)} ${room.numero}`, "room-gallery"));
     const content = makeElement("div", "room-card-content");
     const titleRow = makeElement("div", "room-card-title-row");
-    titleRow.append(
-      makeElement("h3", "", `Quarto ${room.numero}`),
-      makeElement("span", "room-price", formatCurrency(room.valor_base))
-    );
+    titleRow.append(makeElement("h3", "", `${getAccommodationLabel(room)} ${room.numero}`));
     const meta = makeElement("div", "room-meta");
     meta.append(
       makeElement("span", "room-tag", room.andar || "Andar não informado"),
-      makeElement("span", "room-tag", room.tipo_mobilia || "Mobília não informada"),
+      makeElement("span", "room-tag", room.nivel_conforto || "Essencial"),
+      makeElement("span", "room-tag", room.modalidade_cobranca === "diaria" ? "Cobrança diária" : "Cobrança mensal"),
       makeElement("span", "room-tag", `${room.leitos?.length ?? 0} leitos`),
       makeElement("span", `availability-badge ${room.disponivel ? "is-available" : "is-unavailable"}`, room.disponivel ? "Disponível" : "Indisponível")
     );
     content.append(titleRow, meta);
     if (room.features) content.append(makeElement("p", "room-features", room.features));
-    const editButton = makeElement("button", "button button-secondary", "Editar quarto");
+    const editButton = makeElement("button", "button button-secondary", "Editar acomodação");
     editButton.type = "button";
     editButton.addEventListener("click", () => openRoomForm(room));
     content.append(editButton);
@@ -727,7 +736,7 @@ function openHouseForm(house = null) {
   form.elements.namedItem("bairro").value = house?.bairro ?? "";
   form.elements.namedItem("endereco").value = house?.endereco ?? "";
   form.elements.namedItem("disponivel").checked = house?.disponivel ?? false;
-  updateHousePhotoPreview(null, house?.foto_url ?? "");
+  updatePhotoPreview("house-image-preview", [], getPhotoUrls(house));
   document.getElementById("house-dialog").showModal();
   form.elements.namedItem("nome").focus();
 }
@@ -736,14 +745,17 @@ function openRoomForm(room = null) {
   const form = document.getElementById("room-form");
   form.reset();
   document.getElementById("room-id").value = room ? String(room.id) : "";
-  document.getElementById("room-dialog-title").textContent = room ? "Editar quarto" : "Novo quarto";
+  document.getElementById("room-dialog-title").textContent = room ? "Editar acomodação" : "Nova acomodação";
   form.elements.namedItem("numero").value = room?.numero ?? "";
   form.elements.namedItem("andar").value = room?.andar ?? "Térreo";
-  form.elements.namedItem("tipo_mobilia").value = room?.tipo_mobilia ?? "Simples";
-  form.elements.namedItem("valor_base").value = room?.valor_base ?? "0.00";
-  form.elements.namedItem("foto_url").value = room?.foto_url ?? "";
+  const accommodationType = room?.tipo_acomodacao ?? "quarto";
+  form.elements.namedItem("tipo_acomodacao").value = accommodationType;
+  form.elements.namedItem("nivel_conforto").value = room?.nivel_conforto ?? "Essencial";
+  form.elements.namedItem("modalidade_cobranca").value =
+    room?.modalidade_cobranca ?? (accommodationType === "apartamento" ? "mensal" : "diaria");
   form.elements.namedItem("features").value = room?.features ?? "";
   form.elements.namedItem("disponivel").checked = room?.disponivel ?? false;
+  updatePhotoPreview("room-image-preview", [], getPhotoUrls(room));
   document.getElementById("room-dialog").showModal();
   form.elements.namedItem("numero").focus();
 }
@@ -753,35 +765,35 @@ async function saveHouse(event) {
   const form = event.currentTarget;
   const id = document.getElementById("house-id").value;
   const values = new FormData(form);
-  const photoFile = form.elements.namedItem("foto_file").files[0] ?? null;
+  const photoFiles = [...form.elements.namedItem("foto_file").files];
+  const existingHouse = houses.find((house) => String(house.id) === id) || selectedHouse;
   const payload = {
     nome: values.get("nome").trim(),
     bairro: values.get("bairro").trim(),
     endereco: values.get("endereco").trim() || null,
     disponivel: values.get("disponivel") === "on",
-    foto_url: id
-      ? houses.find((house) => String(house.id) === id)?.foto_url ?? selectedHouse?.foto_url ?? null
-      : null
+    foto_url: existingHouse?.foto_url ?? null,
+    fotos_urls: getPhotoUrls(existingHouse)
   };
-  const previousPhotoUrl = payload.foto_url;
-  if (photoFile && !HOUSE_PHOTO_TYPES.has(photoFile.type)) {
-    showStatus("Escolha uma imagem JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF ou BMP.", "error");
+  if (photoFiles.some((file) => !HOUSE_PHOTO_TYPES.has(file.type))) {
+    showStatus("Escolha imagens JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF ou BMP.", "error");
     return;
   }
-  if (photoFile && photoFile.size > HOUSE_PHOTO_MAX_SIZE) {
-    showStatus("A imagem precisa ter no máximo 10 MB.", "error");
+  if (photoFiles.some((file) => file.size > HOUSE_PHOTO_MAX_SIZE)) {
+    showStatus("Cada imagem precisa ter no máximo 10 MB.", "error");
     return;
   }
 
   const submitButton = form.querySelector('[type="submit"]');
   submitButton.disabled = true;
-  let uploadedPhotoPath = null;
+  const uploadedPhotoPaths = [];
 
   try {
-    if (photoFile) {
-      const uploadedPhoto = await uploadHousePhoto(photoFile);
-      uploadedPhotoPath = uploadedPhoto.path;
-      payload.foto_url = uploadedPhoto.publicUrl;
+    for (const file of photoFiles) {
+      const uploadedPhoto = await uploadAccommodationPhoto(file, "casas");
+      uploadedPhotoPaths.push(uploadedPhoto.path);
+      if (!payload.foto_url) payload.foto_url = uploadedPhoto.publicUrl;
+      payload.fotos_urls.push(uploadedPhoto.publicUrl);
     }
 
     const query = id
@@ -792,11 +804,11 @@ async function saveHouse(event) {
     if (!data) throw new Error("Casa não encontrada ou sem permissão para editá-la.");
   } catch (error) {
     let message = `Não foi possível salvar a casa. ${error.message || "Ocorreu um erro inesperado."}`;
-    if (uploadedPhotoPath) {
+    if (uploadedPhotoPaths.length) {
       try {
         const { error: cleanupError } = await supabaseClient.storage
           .from(HOUSE_PHOTO_BUCKET)
-          .remove([uploadedPhotoPath]);
+          .remove(uploadedPhotoPaths);
         if (cleanupError) {
           message += ` Também não foi possível remover a foto enviada: ${cleanupError.message}`;
         }
@@ -823,22 +835,9 @@ async function saveHouse(event) {
     renderSelectedHouse();
   }
 
-  let cleanupWarning = "";
-  const previousPhotoPath = id ? getManagedHousePhotoPath(previousPhotoUrl) : null;
-  if (uploadedPhotoPath && previousPhotoPath && previousPhotoPath !== uploadedPhotoPath) {
-    try {
-      const { error } = await supabaseClient.storage
-        .from(HOUSE_PHOTO_BUCKET)
-        .remove([previousPhotoPath]);
-      if (error) cleanupWarning = ` A foto anterior não pôde ser removida: ${error.message}`;
-    } catch (error) {
-      cleanupWarning = ` A foto anterior não pôde ser removida: ${error.message || "erro desconhecido."}`;
-    }
-  }
-
   showStatus(
-    `${id ? "Dados da casa atualizados." : "Casa cadastrada com sucesso."}${refreshWarning}${cleanupWarning}`,
-    refreshWarning || cleanupWarning ? "warning" : "success"
+    `${id ? "Dados da casa atualizados." : "Casa cadastrada com sucesso."}${refreshWarning}`,
+    refreshWarning ? "warning" : "success"
   );
 }
 
@@ -847,28 +846,42 @@ async function saveRoom(event) {
   const form = event.currentTarget;
   const id = document.getElementById("room-id").value;
   const values = new FormData(form);
+  const photoFiles = [...form.elements.namedItem("fotos_files").files];
+  const existingRoom = rooms.find((room) => String(room.id) === id);
   const payload = {
     casa_id: selectedHouse.id,
     numero: values.get("numero").trim(),
     andar: values.get("andar").trim() || "Térreo",
-    tipo_mobilia: values.get("tipo_mobilia").trim() || "Simples",
-    valor_base: Number(values.get("valor_base")),
-    foto_url: values.get("foto_url").trim() || null,
+    tipo_mobilia: existingRoom?.tipo_mobilia ?? "Completa",
+    valor_base: existingRoom?.valor_base ?? 0,
+    foto_url: existingRoom?.foto_url ?? null,
+    fotos_urls: getPhotoUrls(existingRoom),
     features: values.get("features").trim() || null,
-    disponivel: values.get("disponivel") === "on"
+    disponivel: values.get("disponivel") === "on",
+    tipo_acomodacao: values.get("tipo_acomodacao"),
+    nivel_conforto: values.get("nivel_conforto"),
+    modalidade_cobranca: values.get("modalidade_cobranca")
   };
-  if (payload.foto_url && !safeImageUrl(payload.foto_url)) {
-    showStatus("Informe uma URL de foto iniciada por http:// ou https://.", "error");
+  if (photoFiles.some((file) => !HOUSE_PHOTO_TYPES.has(file.type))) {
+    showStatus("Escolha imagens JPG, PNG, WebP, GIF, AVIF, HEIC, HEIF ou BMP.", "error");
     return;
   }
-  if (!Number.isFinite(payload.valor_base) || payload.valor_base < 0) {
-    showStatus("O valor base precisa ser um número igual ou maior que zero.", "error");
+  if (photoFiles.some((file) => file.size > HOUSE_PHOTO_MAX_SIZE)) {
+    showStatus("Cada imagem precisa ter no máximo 10 MB.", "error");
     return;
   }
   const submitButton = form.querySelector('[type="submit"]');
   submitButton.disabled = true;
+  const uploadedPhotoPaths = [];
 
   try {
+    for (const file of photoFiles) {
+      const uploadedPhoto = await uploadAccommodationPhoto(file, "quartos");
+      uploadedPhotoPaths.push(uploadedPhoto.path);
+      if (!payload.foto_url) payload.foto_url = uploadedPhoto.publicUrl;
+      payload.fotos_urls.push(uploadedPhoto.publicUrl);
+    }
+
     const query = id
       ? supabaseClient.from("quartos").update(payload).eq("id", id).eq("casa_id", selectedHouse.id).select("id").maybeSingle()
       : supabaseClient.from("quartos").insert(payload).select("id").single();
@@ -877,12 +890,32 @@ async function saveRoom(event) {
     if (!data) throw new Error("Quarto não encontrado nesta casa ou sem permissão para editá-lo.");
 
     document.getElementById("room-dialog").close();
+  } catch (error) {
+    if (uploadedPhotoPaths.length) {
+      try {
+        const { error: cleanupError } = await supabaseClient.storage
+          .from(HOUSE_PHOTO_BUCKET)
+          .remove(uploadedPhotoPaths);
+        if (cleanupError) {
+          showStatus(`Não foi possível salvar o quarto. ${error.message || ""} As fotos enviadas também não puderam ser removidas: ${cleanupError.message}`, "error");
+          return;
+        }
+      } catch (cleanupError) {
+        showStatus(`Não foi possível salvar o quarto. ${error.message || ""} As fotos enviadas também não puderam ser removidas: ${cleanupError.message || "erro desconhecido."}`, "error");
+        return;
+      }
+    }
+    showStatus(`Não foi possível salvar o quarto. ${error.message || ""}`, "error");
+    return;
+  } finally {
+    submitButton.disabled = false;
+  }
+
+  try {
     await loadRooms(selectedHouse.id);
     showStatus(id ? "Quarto atualizado com sucesso." : "Quarto cadastrado com sucesso.", "success");
   } catch (error) {
-    showLoadError(error);
-  } finally {
-    submitButton.disabled = false;
+    showStatus(`Acomodação salva, mas a lista não pôde ser atualizada: ${error.message || "erro desconhecido."}`, "warning");
   }
 }
 
@@ -989,16 +1022,12 @@ function getLocalMonthString(date = new Date()) {
   return localDateString(date).slice(0, 7);
 }
 
-function formatBrazilianMonth(month) {
-  const [year, monthNumber] = month.split("-");
-  return `${monthNumber}/${year}`;
-}
-
 function getFinanceMonthString() {
-  const value = document.getElementById("finance-month").value.trim();
-  const match = /^(0[1-9]|1[0-2])\/(\d{4})$/.exec(value);
-  if (!match) throw new Error("Informe o mês de referência no formato MM/AAAA.");
-  return `${match[2]}-${match[1]}`;
+  const value = document.getElementById("finance-month").value;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+    throw new Error("Selecione um mês de referência.");
+  }
+  return value;
 }
 
 function setAdminSignOut() {
@@ -1045,7 +1074,6 @@ function nullableFormValue(formData, name) {
 
 function bindTenantFormEvents() {
   const modeSelect = document.getElementById("tenant-mode");
-  const expenseRule = document.querySelector('#tenant-form [name="despesas_regra"]');
   const form = document.getElementById("tenant-form");
 
   modeSelect.addEventListener("change", () => {
@@ -1058,18 +1086,22 @@ function bindTenantFormEvents() {
       isMonthly ? "Aluguel mensal (R$) *" : "Valor por noite (R$) *";
   });
 
-  expenseRule.addEventListener("change", () => {
-    const details = document.getElementById("expense-rule-details");
-    details.hidden = expenseRule.value !== "outra";
+  document.getElementById("tenant-room-select").addEventListener("change", (event) => {
+    const option = event.currentTarget.selectedOptions[0];
+    if (option?.dataset.modalidade) {
+      modeSelect.value = option.dataset.modalidade;
+      modeSelect.dispatchEvent(new Event("change"));
+    }
+    if (option?.dataset.valorBase) {
+      form.elements.namedItem("valor").value = option.dataset.valorBase;
+    }
   });
-
   form.addEventListener("submit", saveTenantOccupancy);
   document.getElementById("add-tenant-button").addEventListener("click", async () => {
     try {
       await loadTenantRoomOptions();
       form.reset();
       modeSelect.dispatchEvent(new Event("change"));
-      document.getElementById("expense-rule-details").hidden = true;
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       form.elements.namedItem("data_inicio").value = localDateString(tomorrow);
@@ -1092,25 +1124,27 @@ async function loadTenantRoomOptions() {
   const select = document.getElementById("tenant-room-select");
   const { data, error } = await supabaseClient
     .from("quartos")
-    .select("id, numero, casas(nome, bairro)")
+    .select("id, numero, tipo_acomodacao, modalidade_cobranca, valor_base, casas(nome, bairro)")
     .order("numero", { ascending: true });
   if (error) throw error;
 
-  select.replaceChildren(makeElement("option", "", "Selecione um quarto"));
+  select.replaceChildren(makeElement("option", "", "Selecione uma acomodação"));
   select.options[0].value = "";
   (data ?? []).forEach((room) => {
     const house = Array.isArray(room.casas) ? room.casas[0] : room.casas;
     const option = makeElement(
       "option",
       "",
-      `${house?.nome || "Casa"} · Quarto ${room.numero}${house?.bairro ? ` · ${house.bairro}` : ""}`
+      `${house?.nome || "Casa"} · ${getAccommodationLabel(room)} ${room.numero}${house?.bairro ? ` · ${house.bairro}` : ""}`
     );
     option.value = String(room.id);
+    option.dataset.modalidade = room.modalidade_cobranca || "mensal";
+    option.dataset.valorBase = String(room.valor_base ?? "");
     select.append(option);
   });
 
   if (!data?.length) {
-    select.replaceChildren(makeElement("option", "", "Cadastre um quarto antes de criar a locação"));
+    select.replaceChildren(makeElement("option", "", "Cadastre uma acomodação antes de criar a locação"));
     select.options[0].value = "";
   }
 }
@@ -1118,7 +1152,7 @@ async function loadTenantRoomOptions() {
 async function loadTenantOccupancies() {
   const { data, error } = await supabaseClient
     .from("locacoes")
-    .select("id, modalidade, data_inicio, data_fim, valor, despesas_regra, despesas_descricao, status, inquilinos(nome, telefone, email), quartos(numero, casas(nome))")
+    .select("id, modalidade, data_inicio, data_fim, valor, despesas_regra, despesas_descricao, status, inquilinos(nome, telefone), quartos(numero, tipo_acomodacao, casas(nome))")
     .eq("status", "ativa")
     .order("data_inicio", { ascending: false });
   if (error) throw error;
@@ -1141,7 +1175,7 @@ function renderTenantOccupancies(occupancies) {
   if (!occupancies.length) {
     const row = document.createElement("tr");
     const cell = makeElement("td", "empty-state", "Nenhuma locação ativa. Cadastre uma para começar a controlar os recebimentos.");
-    cell.colSpan = 7;
+    cell.colSpan = 6;
     row.append(cell);
     tableBody.append(row);
     return;
@@ -1157,7 +1191,7 @@ function renderTenantOccupancies(occupancies) {
     if (tenant?.telefone) renterCell.append(makeElement("small", "table-secondary-text", tenant.telefone));
     const locationCell = makeElement("td");
     locationCell.append(makeElement("strong", "table-primary-text", house?.nome || "Casa"));
-    locationCell.append(makeElement("small", "table-secondary-text", `Quarto ${room?.numero || "—"}`));
+    locationCell.append(makeElement("small", "table-secondary-text", `${getAccommodationLabel(room)} ${room?.numero || "—"}`));
     const ruleLabels = {
       incluidas: "Inclusas",
       rateio: "Rateio igual",
@@ -1170,14 +1204,15 @@ function renderTenantOccupancies(occupancies) {
       renterCell,
       locationCell,
       makeElement("td", "", occupancy.modalidade === "mensal" ? "Mensal" : "Diária"),
-      makeElement("td", "", `${formatCurrency(occupancy.valor)}${occupancy.modalidade === "diaria" ? " / noite" : " / mês"}`),
       makeElement("td", "", `${formatDate(occupancy.data_inicio)} – ${formatDate(occupancy.data_fim)}`),
       makeElement("td", "", ruleLabels[occupancy.despesas_regra] || "—"),
       makeElement("td")
     ];
+    const labels = ["Inquilino", "Casa / acomodação", "Modalidade", "Período", "Despesas", "Ação"];
+    cells.forEach((cell, index) => { cell.dataset.label = labels[index]; });
     cells[0].className = "";
     cells[1].className = "";
-    cells[6].append(closeButton);
+    cells[5].append(closeButton);
     cells.forEach((cell) => {
       if (cell.tagName !== "TD") {
         const wrapper = makeElement("td");
@@ -1216,16 +1251,7 @@ async function saveTenantOccupancy(event) {
 
   const tenant = {
     nome: String(values.get("nome")).trim(),
-    telefone: String(values.get("telefone")).trim(),
-    email: nullableFormValue(values, "email"),
-    nascimento: nullableFormValue(values, "nascimento"),
-    cpf: nullableFormValue(values, "cpf"),
-    rg: nullableFormValue(values, "rg"),
-    rg_data_expedicao: nullableFormValue(values, "rg_data_expedicao"),
-    estado_civil: nullableFormValue(values, "estado_civil"),
-    profissao: nullableFormValue(values, "profissao"),
-    empresa_trabalho: nullableFormValue(values, "empresa_trabalho"),
-    endereco: nullableFormValue(values, "endereco")
+    telefone: String(values.get("telefone")).trim()
   };
   const occupancy = {
     quarto_id: Number(values.get("quarto_id")),
@@ -1234,26 +1260,13 @@ async function saveTenantOccupancy(event) {
     data_fim: end,
     valor: rate,
     dia_vencimento: values.get("modalidade") === "mensal" ? Number(values.get("dia_vencimento")) : 10,
-    taxa_contrato: Number(values.get("taxa_contrato") || 0),
-    forma_pagamento: values.get("forma_pagamento"),
-    despesas_regra: values.get("despesas_regra"),
-    despesas_descricao: nullableFormValue(values, "despesas_descricao"),
-    multa_percentual: Number(values.get("multa_percentual") || 0),
-    juros_percentual: Number(values.get("juros_percentual") || 0),
-    aviso_rescisao_dias: Number(values.get("aviso_rescisao_dias") || 0),
-    fiador_nome: nullableFormValue(values, "fiador_nome"),
-    fiador_nascimento: nullableFormValue(values, "fiador_nascimento"),
-    fiador_cpf: nullableFormValue(values, "fiador_cpf"),
-    fiador_rg: nullableFormValue(values, "fiador_rg"),
-    fiador_telefone: nullableFormValue(values, "fiador_telefone"),
-    fiador_estado_civil: nullableFormValue(values, "fiador_estado_civil"),
-    fiador_profissao: nullableFormValue(values, "fiador_profissao"),
-    fiador_endereco: nullableFormValue(values, "fiador_endereco"),
-    fiador_conjuge_nome: nullableFormValue(values, "fiador_conjuge_nome"),
-    fiador_conjuge_cpf: nullableFormValue(values, "fiador_conjuge_cpf")
+    taxa_contrato: 0,
+    forma_pagamento: "pix",
+    despesas_regra: "incluidas",
+    despesas_descricao: null
   };
-  if (!occupancy.quarto_id || !Number.isFinite(occupancy.taxa_contrato) || occupancy.taxa_contrato < 0) {
-    showStatus("Selecione um quarto e confira a taxa de contrato.", "error");
+  if (!occupancy.quarto_id) {
+    showStatus("Selecione uma acomodação.", "error");
     return;
   }
 
@@ -1306,7 +1319,7 @@ async function initTenantPage() {
 }
 
 function renderFinanceTransactions(receivables, expenses) {
-  const body = document.getElementById("finance-entry-list");
+  const list = document.getElementById("finance-entry-list");
   const rows = [
     ...receivables.map((item) => ({
       id: item.id,
@@ -1329,21 +1342,17 @@ function renderFinanceTransactions(receivables, expenses) {
       source: item
     }))
   ].sort((a, b) => String(b.dueDate).localeCompare(String(a.dueDate)));
-  body.replaceChildren();
+  list.replaceChildren();
   document.getElementById("finance-entry-count").textContent =
     `${rows.length} ${rows.length === 1 ? "movimentação" : "movimentações"}`;
 
   if (!rows.length) {
-    const row = document.createElement("tr");
-    const cell = makeElement("td", "empty-state", "Nenhuma movimentação neste mês.");
-    cell.colSpan = 7;
-    row.append(cell);
-    body.append(row);
+    list.append(makeElement("p", "empty-state", "Nenhuma movimentação neste mês."));
     return;
   }
 
   rows.forEach((item) => {
-    const row = document.createElement("tr");
+    const row = makeElement("article", "finance-entry");
     const isPaid = item.status === "Pago";
     const isOverdue = item.status === "Pendente" && item.dueDate < localDateString();
     const kind = makeElement(
@@ -1351,72 +1360,42 @@ function renderFinanceTransactions(receivables, expenses) {
       `transaction-kind ${item.kind === "recebimento" ? "kind-income" : "kind-expense"}`,
       item.kind === "recebimento" ? "Entrada" : "Saída"
     );
+    const badges = makeElement("div", "finance-entry-badges");
+    badges.append(kind);
+    const details = makeElement("div", "finance-entry-details");
+    details.append(
+      makeElement("strong", "finance-entry-title", item.description),
+      makeElement("span", "finance-entry-date", `Vencimento: ${formatDate(item.dueDate)}`)
+    );
     const status = makeElement(
       "span",
       `transaction-status ${isPaid ? "status-paid" : isOverdue ? "status-overdue" : item.status === "Cancelado" ? "status-cancelled" : "status-pending"}`,
       isOverdue ? "Atrasado" : item.status
     );
-    const descriptionCell = makeElement("td");
-    descriptionCell.append(makeElement("strong", "table-primary-text", item.description));
-    const categoryCell = makeElement("td", "transaction-category", String(item.category).replaceAll("_", " "));
-    const actionCell = makeElement("td");
+    badges.append(status);
+    const amount = makeElement("strong", "finance-entry-amount", formatCurrency(item.amount));
+    const action = makeElement("div", "finance-entry-action");
 
     if (!isPaid && item.status !== "Cancelado") {
       const button = makeElement("button", "button button-secondary button-small", "Marcar pago");
       button.type = "button";
       button.addEventListener("click", () => markFinanceEntryPaid(item));
-      actionCell.append(button);
+      action.append(button);
     } else {
-      actionCell.textContent = item.status === "Pago" && item.source.data_pagamento
-        ? formatDate(item.source.data_pagamento)
-        : "—";
+      action.append(makeElement(
+        "span",
+        "finance-entry-date",
+        item.status === "Pago" && item.source.data_pagamento
+          ? `Pago em ${formatDate(item.source.data_pagamento)}`
+          : "—"
+      ));
     }
 
-    row.append(
-      makeElement("td", "", ""),
-      descriptionCell,
-      categoryCell,
-      makeElement("td", "money-cell", formatCurrency(item.amount)),
-      makeElement("td", "", formatDate(item.dueDate)),
-      makeElement("td", "").appendChild(status).parentElement,
-      actionCell
-    );
-    row.firstElementChild.append(kind);
-    body.append(row);
+    const summary = makeElement("div", "finance-entry-summary");
+    summary.append(amount, action);
+    row.append(badges, details, summary);
+    list.append(row);
   });
-}
-
-function renderExpenseCategorySummary(expenses) {
-  const container = document.getElementById("expense-category-summary");
-  const totals = new Map();
-  expenses.forEach((expense) => {
-    totals.set(expense.categoria, (totals.get(expense.categoria) ?? 0) + Number(expense.valor));
-  });
-  const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0);
-  document.getElementById("expense-breakdown-total").textContent = formatCurrency(total);
-  container.replaceChildren();
-
-  if (!totals.size) {
-    container.append(makeElement("p", "empty-state", "Nenhuma despesa neste mês."));
-    return;
-  }
-
-  [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([category, amount]) => {
-      const row = makeElement("div", "expense-category-row");
-      const heading = makeElement("div", "expense-category-heading");
-      heading.append(
-        makeElement("span", "", category.replaceAll("_", " ")),
-        makeElement("strong", "", formatCurrency(amount))
-      );
-      const track = makeElement("div", "expense-category-track");
-      const fill = makeElement("span", "expense-category-fill");
-      fill.style.width = `${total ? Math.max(2, amount / total * 100) : 0}%`;
-      track.append(fill);
-      row.append(heading, track);
-      container.append(row);
-    });
 }
 
 async function loadFinanceDashboard() {
@@ -1453,8 +1432,83 @@ async function loadFinanceDashboard() {
     `${paidExpenses.length} ${paidExpenses.length === 1 ? "despesa paga" : "despesas pagas"} · ${expenses.filter((entry) => entry.status === "Pendente").length} pendentes`;
   document.getElementById("finance-balance").textContent =
     formatCurrency(sum(paidReceipts) - sum(paidExpenses));
-  renderExpenseCategorySummary(expenses);
   renderFinanceTransactions(receipts, expenses);
+}
+
+function renderAccommodationRates(accommodations) {
+  const list = document.getElementById("accommodation-rates-list");
+  list.replaceChildren();
+  if (!accommodations.length) {
+    list.append(makeElement("p", "empty-state", "Cadastre uma acomodação antes de configurar valores."));
+    return;
+  }
+
+  accommodations.forEach((accommodation) => {
+    const house = Array.isArray(accommodation.casas) ? accommodation.casas[0] : accommodation.casas;
+    const card = makeElement("article", "rate-card");
+    const heading = makeElement("div", "rate-card-heading");
+    heading.append(
+      makeElement("h3", "", `${getAccommodationLabel(accommodation)} ${accommodation.numero}`),
+      makeElement("p", "", `${house?.nome || "Casa"}${house?.bairro ? ` · ${house.bairro}` : ""}`)
+    );
+    const form = makeElement("form", "rate-form");
+    const label = makeElement("label", "form-field");
+    label.append(makeElement(
+      "span",
+      "",
+      accommodation.modalidade_cobranca === "diaria" ? "Valor da diária (R$)" : "Valor mensal (R$)"
+    ));
+    const input = document.createElement("input");
+    input.name = "valor_base";
+    input.type = "number";
+    input.min = "0.01";
+    input.step = "0.01";
+    input.required = true;
+    input.value = Number(accommodation.valor_base) > 0 ? String(accommodation.valor_base) : "";
+    input.placeholder = "Informe o valor";
+    label.append(input);
+    const saveButton = makeElement("button", "button button-secondary", "Salvar valor");
+    saveButton.type = "submit";
+    form.append(label, saveButton);
+    form.addEventListener("submit", (event) => saveAccommodationRate(event, accommodation.id, input, saveButton));
+    card.append(heading, form);
+    list.append(card);
+  });
+}
+
+async function loadAccommodationRates() {
+  const { data, error } = await supabaseClient
+    .from("quartos")
+    .select("id, numero, tipo_acomodacao, modalidade_cobranca, valor_base, casas(nome, bairro)")
+    .order("numero", { ascending: true });
+  if (error) throw error;
+  renderAccommodationRates(data ?? []);
+}
+
+async function saveAccommodationRate(event, accommodationId, input, button) {
+  event.preventDefault();
+  const amount = Number(input.value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showStatus("Informe um valor maior que zero.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const { data, error } = await supabaseClient
+      .from("quartos")
+      .update({ valor_base: amount })
+      .eq("id", accommodationId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("A acomodação não foi encontrada ou não pôde ser atualizada.");
+    showStatus("Valor interno atualizado. Ele não será exibido no catálogo público.", "success");
+  } catch (error) {
+    showStatus(`Não foi possível salvar o valor. ${error.message || ""}`, "error");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function markFinanceEntryPaid(entry) {
@@ -1578,7 +1632,7 @@ async function initFinancePage() {
   bindExpenseFormEvents();
 
   const monthInput = document.getElementById("finance-month");
-  monthInput.value = formatBrazilianMonth(getLocalMonthString());
+  monthInput.value = getLocalMonthString();
   monthInput.addEventListener("change", async () => {
     try {
       await loadFinanceDashboard();
@@ -1587,7 +1641,7 @@ async function initFinancePage() {
       showLoadError(error);
     }
   });
-  await loadFinanceDashboard();
+  await Promise.all([loadFinanceDashboard(), loadAccommodationRates()]);
 }
 
 async function initAdmin() {
@@ -1690,17 +1744,26 @@ function bindAccommodationEvents() {
   });
   document.getElementById("house-form").addEventListener("submit", saveHouse);
   document.getElementById("room-form").addEventListener("submit", saveRoom);
+  document.querySelector('#room-form [name="tipo_acomodacao"]').addEventListener("change", (event) => {
+    document.querySelector('#room-form [name="modalidade_cobranca"]').value =
+      event.currentTarget.value === "apartamento" ? "mensal" : "diaria";
+  });
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.closeDialog).close());
   });
   const houseForm = document.getElementById("house-form");
   houseForm.elements.namedItem("foto_file").addEventListener("change", (event) => {
-    const selectedFile = event.currentTarget.files[0] ?? null;
-    const currentPhoto = selectedHouse?.foto_url ?? "";
-    updateHousePhotoPreview(selectedFile, selectedFile ? "" : currentPhoto);
+    const house = houses.find((item) => String(item.id) === document.getElementById("house-id").value);
+    updatePhotoPreview("house-image-preview", [...event.currentTarget.files], getPhotoUrls(house));
     clearStatus();
   });
-  document.getElementById("house-dialog").addEventListener("close", releaseHousePhotoPreview);
+  document.getElementById("room-form").elements.namedItem("fotos_files").addEventListener("change", (event) => {
+    const room = rooms.find((item) => String(item.id) === document.getElementById("room-id").value);
+    updatePhotoPreview("room-image-preview", [...event.currentTarget.files], getPhotoUrls(room));
+    clearStatus();
+  });
+  document.getElementById("house-dialog").addEventListener("close", releaseAccommodationPhotoPreviews);
+  document.getElementById("room-dialog").addEventListener("close", releaseAccommodationPhotoPreviews);
   const signOutButton = document.getElementById("admin-signout");
   signOutButton.addEventListener("click", async () => {
     try {
@@ -1788,11 +1851,9 @@ async function start() {
       document.getElementById("tenant-list").replaceChildren(row);
     }
     if (page === "financeiro") {
-      const row = document.createElement("tr");
-      const cell = makeElement("td", "empty-state", "Não foi possível carregar o financeiro. Execute sql/financeiro-locacoes.sql no Supabase.");
-      cell.colSpan = 7;
-      row.append(cell);
-      document.getElementById("finance-entry-list").replaceChildren(row);
+      document.getElementById("finance-entry-list").replaceChildren(
+        makeElement("p", "empty-state", "Não foi possível carregar o financeiro. Execute sql/financeiro-locacoes.sql no Supabase.")
+      );
     }
   }
 }

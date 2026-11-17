@@ -1647,15 +1647,36 @@ async function initFinancePage() {
 async function initAdmin() {
   document.getElementById("copy-admin-sql").addEventListener("click", async (event) => {
     const button = event.currentTarget;
-    const sql = document.getElementById("admin-role-sql").textContent;
+    const emailInput = document.getElementById("admin-role-email");
+    if (!emailInput.reportValidity()) return;
+
+    const email = emailInput.value.trim().toLowerCase().replace(/'/g, "''");
+    const sql = `do $$
+declare
+  target_email text := '${email}';
+  affected_rows integer;
+begin
+  update auth.users
+  set raw_app_meta_data =
+    coalesce(raw_app_meta_data, '{}'::jsonb) ||
+    jsonb_build_object('role', 'admin')
+  where lower(email) = target_email;
+
+  get diagnostics affected_rows = row_count;
+  if affected_rows <> 1 then
+    raise exception 'Expected to update exactly one Auth user; found %.', affected_rows;
+  end if;
+end
+$$;`;
+    document.getElementById("admin-role-sql").textContent = sql;
     try {
       await navigator.clipboard.writeText(sql);
       button.textContent = "SQL copiado";
       window.setTimeout(() => {
-        button.textContent = "Copiar SQL";
+        button.textContent = "Gerar e copiar SQL";
       }, 2000);
     } catch (error) {
-      showStatus(`Não foi possível copiar automaticamente. Selecione o SQL exibido e copie manualmente. ${error.message || ""}`, "error");
+      showStatus(`O SQL foi gerado, mas não foi possível copiá-lo automaticamente. Selecione o comando exibido e copie manualmente. ${error.message || ""}`, "error");
     }
   });
 

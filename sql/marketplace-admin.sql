@@ -97,7 +97,8 @@ grant select (id, casa_id, numero, andar, tipo_mobilia, foto_url, fotos_urls, fe
 revoke select (valor_base) on public.quartos from anon;
 grant select on public.configuracoes_publicas to anon;
 
--- A public bucket lets visitors see published accommodation photos; only admins can upload or delete.
+-- Public URLs keep published accommodation photos visible without allowing
+-- anonymous clients to list all objects in the bucket.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'pensionato-uploads',
@@ -121,10 +122,14 @@ set public = excluded.public,
     allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Public can view pensionato photos" on storage.objects;
-create policy "Public can view pensionato photos"
+drop policy if exists "Administrators view pensionato photos" on storage.objects;
+create policy "Administrators view pensionato photos"
   on storage.objects for select
-  to anon, authenticated
-  using (bucket_id = 'pensionato-uploads');
+  to authenticated
+  using (
+    bucket_id = 'pensionato-uploads'
+    and public.is_pensionato_admin()
+  );
 
 drop policy if exists "Administrators upload pensionato photos" on storage.objects;
 create policy "Administrators upload pensionato photos"

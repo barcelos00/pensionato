@@ -117,7 +117,7 @@ $$;
 
 create policy "Public can read available rooms"
   on public.quartos for select
-  to anon, authenticated
+  to anon
   using (
     disponivel = true
     and not public.quarto_ocupado_hoje(id)
@@ -204,12 +204,29 @@ create policy "Administrators manage receipts"
   with check (public.is_pensionato_admin());
 
 revoke all on public.inquilinos, public.despesas, public.locacoes, public.recebimentos from anon, authenticated;
-grant select, update on public.inquilinos, public.despesas, public.locacoes, public.recebimentos to authenticated;
+grant select, insert on public.inquilinos, public.despesas, public.locacoes, public.recebimentos to authenticated;
+grant update (status, data_pagamento, atualizado_em) on public.despesas, public.recebimentos to authenticated;
+grant update (status, encerrada_em) on public.locacoes to authenticated;
+
+do $$
+declare
+  table_name text;
+  sequence_name text;
+begin
+  foreach table_name in array array['inquilinos', 'despesas', 'locacoes', 'recebimentos']
+  loop
+    sequence_name := pg_get_serial_sequence(format('public.%I', table_name), 'id');
+    if sequence_name is not null then
+      execute format('grant usage, select on sequence %s to authenticated', sequence_name);
+    end if;
+  end loop;
+end
+$$;
 
 create or replace function public.criar_locacao_financeira(p_inquilino jsonb, p_locacao jsonb)
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 declare
@@ -409,7 +426,7 @@ $$;
 create or replace function public.registrar_despesa_financeira(p_despesa jsonb)
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 declare
@@ -530,7 +547,7 @@ create or replace function public.encerrar_locacao_financeira(
 )
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = ''
 as $$
 declare

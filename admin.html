@@ -61,8 +61,8 @@
           <summary>Ainda não tenho um administrador. Como criar?</summary>
           <ol class="setup-steps">
             <li>
-              <strong>Execute a migração do projeto.</strong>
-              No Supabase, abra <b>SQL Editor → New query</b>, cole o conteúdo atualizado de <code>sql/marketplace-admin.sql</code> e clique em <b>Run</b>. A migração configura as fotos da casa e dos quartos, níveis de conforto, modalidades de cobrança, disponibilidade, WhatsApp e regras de acesso.
+              <strong>Configure o banco com segurança.</strong>
+              No Supabase, abra <b>SQL Editor → New query</b> e execute os arquivos da pasta <code>sql</code>, nesta ordem: <code>marketplace-admin.sql</code>, <code>financeiro-locacoes.sql</code> e <code>security-hardening.sql</code>. Se o projeto já está configurado, execute apenas <code>security-hardening.sql</code>.
             </li>
             <li>
               <strong>Crie o usuário.</strong>
@@ -70,16 +70,16 @@
             </li>
             <li>
               <strong>Marque esse usuário como administrador.</strong>
-              No <b>SQL Editor → New query</b>, troque o e-mail de exemplo pelo e-mail criado acima e execute:
+              Informe o mesmo e-mail criado no Supabase. O botão gera o comando para executar em <b>SQL Editor → New query</b>:
+              <label class="form-field">
+                <span>E-mail cadastrado no Supabase</span>
+                <input id="admin-role-email" type="email" autocomplete="email" placeholder="admin@exemplo.com" required>
+              </label>
               <div class="sql-copy-block">
-                <pre><code id="admin-role-sql">update auth.users
-set raw_app_meta_data =
-  coalesce(raw_app_meta_data, '{}'::jsonb) ||
-  '{"role":"admin"}'::jsonb
-where email = 'SEU_EMAIL_AQUI';</code></pre>
-                <button class="button button-secondary" id="copy-admin-sql" type="button">Copiar SQL</button>
+                <pre><code id="admin-role-sql">Preencha o e-mail acima para gerar o SQL.</code></pre>
+                <button class="button button-secondary" id="copy-admin-sql" type="button">Gerar e copiar SQL</button>
               </div>
-              <span class="form-hint">Confira se o comando atualizou exatamente 1 usuário. Depois, entre aqui com o e-mail e a senha criados. Se já estava conectado, saia e entre novamente.</span>
+              <span class="form-hint">O comando verifica que encontrou exatamente 1 conta e preserva os outros metadados. Depois, entre novamente para carregar a permissão.</span>
             </li>
           </ol>
           <p class="setup-warning"><strong>Importante:</strong> não coloque a chave <code>service_role</code> no site e não compartilhe sua senha. A criação do usuário é feita no painel do Supabase, nunca por um formulário público.</p>
